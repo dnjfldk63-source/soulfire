@@ -1202,7 +1202,7 @@ function calc() {
   s.cdr = 1 - .06 * Math.min(5, sl('haste')) - .03 * Math.max(0, sl('haste') - 5); s.aspd += 6 * sl('haste');
   s.ls += sv('vamp', SKILLS.vamp.v);
   s.dr = 0;
-  if (sl('swift') >= 6) s.dodge += 10; if (sl('power') >= 6) s.critDmg += 25; if (sl('vigor') >= 6) s.dr = .1;
+  if (sl('swift') >= 6) s.dodge += 5; if (sl('power') >= 6) s.critDmg += 25; if (sl('vigor') >= 6) s.dr = .1;
   if (sl('haste') >= 6) s.aspd += 15; if (sl('crit') >= 6) s.critDmg += 30; if (sl('magnet') >= 6) s.gold += 30;
   s.crit += 5 * sl('crit'); s.critDmg += 10 * sl('crit');
   s.pickR = 30 + 18 * sl('magnet'); s.magnet = 110 + 45 * sl('magnet'); s.gold += 10 * sl('magnet');
@@ -3190,7 +3190,7 @@ function fxDraw(k, x, y, w, rot = 0, alpha = 1, sq = 1, h = 0, normal = false) {
 function hurtPlayer(dmg, src) {
   if (P.inv > 0 || P.dead || GOD) return;
   if (S.dodge && Math.random() * 100 < S.dodge) { addText(P.x, P.y - 24, '회피', '#d8e86a', 14); return; }
-  if ((P.stealthT > 0 && Math.random() < .2) || (P.smokeIn && Math.random() < .35)) { addText(P.x, P.y - 24, '회피', '#b9a0ff', 14); return; }
+  if ((P.stealthT > 0 && Math.random() < .1) || (P.smokeIn && Math.random() < .18)) { addText(P.x, P.y - 24, '회피', '#b9a0ff', 14); return; }
   if (RAID && RAID.mult > 1) dmg *= RAID.mult;
   if (S.dr) dmg *= 1 - S.dr;
   if (S.setFx && S.setFx.frost6) { dmg *= .8; if (Math.random() < .25) { addSfx('shock', P.x, P.y, 300, .5, { g0: .4, g1: 1.1 }); for (const m of mobs) if (m.hp > 0 && !m.boss && Math.hypot(m.x - P.x, m.y - P.y) < 150) { m.frz = 1.5; m.kbx = m.kby = 0; } } }
@@ -3331,7 +3331,7 @@ const AWAKEN = {
   poison: { name: '역병의 늪', desc: '독 안개를 세 곳에 동시에 깔고, 안에 있는 적을 40% 느리게 해요' },
   firePath: { name: '지옥불 질주', desc: '움직이는 동안 1.2초마다 발밑에서 불기둥이 폭발해요' },
   iceSword: { name: '절대영도', desc: '얼어붙은 적은 받는 피해 +50%, 얼어 있는 적을 처치하면 주변 적까지 얼려요' },
-  swift: { name: '바람걸음', desc: '회피율 +10%' },
+  swift: { name: '바람걸음', desc: '회피율 +5%' },
   power: { name: '광전사', desc: '치명타 피해 +25%' },
   vigor: { name: '불굴', desc: '받는 피해 -10%' },
   haste: { name: '시간 가속', desc: '공격 속도 +15%' },
@@ -3414,7 +3414,7 @@ const THF_SKILLS = {
     cast(l) { const n = (l >= SK_AW ? 4 : 2) + (thfSet('frost6') ? 3 : 0), near = mobs.filter(m => m.hp > 0 && !m.air && Math.hypot(m.x - P.x, m.y - P.y) < 380).sort((a, b) => Math.hypot(a.x - P.x, a.y - P.y) - Math.hypot(b.x - P.x, b.y - P.y)).slice(0, n); if (!near.length) return false; const list = []; for (let i = 0; i < n; i++) list.push(near[i % near.length]); THFO.push({ k: 'step', t: 0, next: 0, list, dmg: S.atk * pickL(this.m, l) * thfM() }); P.inv = Math.max(P.inv, .18 * list.length + .2); } },
   tSmoke: { cls: 'chae', name: '연막탄', type: '투척', icon: '☁', img: 't_smoke',
     r: [100, 110, 120, 135, 150], cdv: [8, 7.5, 7, 6.5, 6],
-    desc(l) { return `적 무리에 연막탄을 던져 반경 ${pickL(this.r, l)}에 4.5초 동안 연막을 깔아요. 안의 적은 45% 느려지고, 내가 연막 안에 있으면 35% 확률로 공격을 피해요.${l >= SK_AW ? ' 연막에 독이 섞여 0.5초마다 공격력의 36% 피해.' : ''} ${pickL(this.cdv, l)}초마다`; },
+    desc(l) { return `적 무리에 연막탄을 던져 반경 ${pickL(this.r, l)}에 4.5초 동안 연막을 깔아요. 안의 적은 45% 느려지고, 내가 연막 안에 있으면 18% 확률로 공격을 피해요.${l >= SK_AW ? ' 연막에 독이 섞여 0.5초마다 공격력의 36% 피해.' : ''} ${pickL(this.cdv, l)}초마다`; },
     cd(l) { return pickL(this.cdv, l); },
     cast(l) { const t = nearestMob(380); if (!t) return false; THFO.push({ k: 'bomb', x: P.x, y: P.y - 20, tx: t.x, ty: t.y, t: 0, fl: .35, r: pickL(this.r, l), aw: l >= SK_AW }); SFX.knife(); } },
   tClone: { cls: 'chae', name: '그림자 분신', type: '소환', icon: '♟', img: 't_clone',
@@ -3423,7 +3423,7 @@ const THF_SKILLS = {
     cd(l) { return pickL(this.cdv, l); },
     cast(l) { for (const o of THFO) if (o.k === 'clone') o.done = 1; const n = pickL(this.n, l) + (thfSet('blood6') ? 1 : 0); for (let k = 0; k < n; k++) { const a = k / n * TAU + rand(-.3, .3); let x = P.x + Math.cos(a) * 40, y = P.y + Math.sin(a) * 26; if (solidAt(x, y)) { x = P.x; y = P.y; } THFO.push({ k: 'clone', x, y, t: 0, life: pickL(this.lf, l), cd: .3 + k * .12, dmg: S.atk * pickL(this.m, l) * thfM(), aw: l >= SK_AW, face: 0, walk: 0, atkA: null }); burst(x, y - 20, '#3a2a4a', 14, 120, .5, 4); } SFX.summon(); } },
   tStealth: { cls: 'chae', name: '그림자 은신', type: '강화', icon: '◐', img: 't_stealth',
-    desc(l) { return `${(5 + (l - 1) * .5).toFixed(1)}초 동안 그림자에 숨어요. 몸이 반투명해지고 회피 +20%, 이동 속도 +25%, 주는 피해 +20%.${l >= SK_AW ? ' 각성: 붉은 그림자가 되어 그동안 기술 재사용 대기시간이 25% 빨리 돌아요.' : ''} 30초마다`; },
+    desc(l) { return `${(5 + (l - 1) * .5).toFixed(1)}초 동안 그림자에 숨어요. 몸이 반투명해지고 회피 +10%, 이동 속도 +25%, 주는 피해 +20%.${l >= SK_AW ? ' 각성: 붉은 그림자가 되어 그동안 기술 재사용 대기시간이 25% 빨리 돌아요.' : ''} 30초마다`; },
     cd() { return 30; },
     cast(l) { P.stealthT = 5 + (l - 1) * .5; P.stealthAw = l >= SK_AW; for (let k = 0; k < 18; k++) fx.push({ x: P.x + rand(-16, 16), y: P.y - rand(0, 40), vx: rand(-30, 30), vy: -rand(20, 70), t: 0, life: rand(.4, .9), col: P.stealthAw ? '#8a1020' : '#2a2238', size: rand(3, 6) }); SFX.cloak(); } },
   tStorm: { cls: 'chae', name: '칼날 폭풍', type: '지속', icon: '✺', img: 't_storm',
