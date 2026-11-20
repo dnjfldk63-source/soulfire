@@ -290,6 +290,7 @@ body.compact #bgmBox{right:calc(env(safe-area-inset-right,0px) + 146px);top:calc
 #warpOv{position:fixed;inset:0;pointer-events:none;z-index:40;opacity:0;background:radial-gradient(ellipse at center,rgba(150,220,255,.0) 20%,rgba(40,110,200,.55) 75%,rgba(10,30,70,.85))}#warpOv.go{animation:warpGo 1.4s ease}@keyframes warpGo{0%{opacity:0}45%{opacity:1}55%{opacity:1}100%{opacity:0}}
 .setp .sr{display:grid;grid-template-columns:80px 64px 1fr;align-items:center;gap:10px;padding:6px 0}.setp .sr span{color:#e8dcc8}.setp .sr .btn{padding:6px 8px;font-size:12px}.setp input[type=range]{width:100%;accent-color:#ffb020}.setp>.btn{margin-top:4px}
 #qTrack .qc{pointer-events:auto;cursor:pointer;border-radius:4px;animation:qcGlow 1.4s ease-in-out infinite}#qTrack .qc:hover{background:rgba(127,255,176,.12)}@keyframes qcGlow{0%,100%{box-shadow:none}50%{box-shadow:0 0 0 1px rgba(127,255,176,.55),0 0 10px rgba(127,255,176,.35)}}
+.cmp{margin:8px 0 4px;padding:8px 10px;border:1px solid rgba(255,255,255,.08);border-radius:8px;background:rgba(0,0,0,.25);font-size:12px}.cmp .cmh{color:var(--dim);margin-bottom:6px;line-height:1.45}.cmp .cmh small{display:block;color:#a89a88;font-size:11px}.cmp .cml{color:#ffcf8a;font-weight:800;margin:4px 0}.cmp .cr{display:grid;grid-template-columns:1fr auto auto;gap:8px;padding:2px 0;align-items:center}.cmp .cr span{color:#e8dcc8}.cmp .cr em{font-style:normal;color:#a89a88;font-size:11px}.cmp .cr b{min-width:54px;text-align:right}
 #qTog{position:absolute;right:2px;top:2px;width:18px;height:18px;padding:0;border:0;border-radius:4px;background:rgba(0,0,0,.35);color:#ffd58a;font-size:12px;line-height:18px;cursor:pointer;pointer-events:auto}
 #qTrack.fold{padding:3px 22px 3px 6px}#qTrack.fold #qBody{display:none}#qTrack.fold::before{content:'📜 퀘스트';font-size:11px;color:#ffd58a}
 #qTrack #qBody>div+div{margin-top:4px;padding-top:4px;border-top:1px solid rgba(58,42,32,.6)}#qTrack .qs b{color:#8fd8ff}#qTrack b{color:#ffd58a;font-family:var(--f-display)}#qTrack .qn{color:#ffcf6a;font-weight:700}#qTrack .qd{color:#7fffb0}
@@ -1004,18 +1005,19 @@ const RAR = [
 ];
 const STAT_KO = { atk: '공격력', def: '방어력', maxHp: '생명력', crit: '치명타 확률', critDmg: '치명타 피해', aspd: '공격 속도', mspd: '이동 속도', regen: '초당 생명력 재생', gold: '골드 획득', ls: '생명력 흡수', cdrp: '재사용 대기시간 감소' };
 const PCT = { crit: 1, critDmg: 1, aspd: 1, mspd: 1, gold: 1, ls: 1, cdrp: 1 };
+const rollC = (a, b) => a + (b - a) * Math.pow(Math.random(), 2); // 위쪽 10% 구간이 나올 확률 ≈ 5%
 const AFF = {
   atk: { p: '날카로운', roll: l => 1 + l * .5, noRoll: 1 },
   def: { p: '견고한', roll: l => 1 + l * .35, noRoll: 1 },
   maxHp: { p: '활기찬', roll: l => 6 + l * 3.5 },
-  crit: { p: '정밀한', roll: () => rand(2, 6) },
-  critDmg: { p: '잔혹한', roll: () => rand(10, 30) },
-  aspd: { p: '재빠른', roll: () => rand(4, 12) },
-  mspd: { p: '바람의', roll: () => rand(3, 10) },
+  crit: { p: '정밀한', roll: () => rollC(2, 6) },
+  critDmg: { p: '잔혹한', roll: () => rollC(10, 30) },
+  aspd: { p: '재빠른', roll: () => rollC(4, 12) },
+  mspd: { p: '바람의', roll: () => rollC(3, 10) },
   regen: { p: '재생의', roll: l => .5 + l * .15, dec: 1 },
-  gold: { p: '탐욕의', roll: () => rand(10, 30) },
-  ls: { p: '흡혈의', roll: () => rand(1, 3), minR: 2 },
-  cdrp: { p: '노련한', roll: l => Math.min(10, rand(.5, 1.5 + l * .145)), dec: 1 },
+  gold: { p: '탐욕의', roll: () => rollC(10, 30) },
+  ls: { p: '흡혈의', roll: () => rollC(1, 3), minR: 2 },
+  cdrp: { p: '노련한', roll: l => Math.min(10, rollC(.5, 1.5 + l * .145)), dec: 1 },
 };
 // ───────── 레이드 세트 장비: 3개·6개 착용 효과 ─────────
 const setB6 = S0 => S0.b6 + (S0.cls6 && S0.cls6[P.cls] ? ' · ' + S0.cls6[P.cls] : '');
@@ -5008,6 +5010,14 @@ function openPanel(kind) { panel = kind; if (kind === 'inv') { sel = null; P._in
 function closePanel() { panel = null; $('#panel').hidden = true; save(); }
 const LS_MUL = .1;
 const statVal = (k, v) => k === 'ls' ? `${Math.round(v * LS_MUL * 100) / 100}%` : PCT[k] ? `${(Math.round(v * 10) / 10)}%` : k === 'regen' ? `${(Math.round(v * 10) / 10)}` : fmt(v);
+function statsWith(it) { const slot = it.slot, keep = P.eq[slot], hp = P.hp, mp = P.mp; const pick = () => ({ atk: S.atk, def: S.def, maxHp: S.maxHp, crit: S.crit, critDmg: S.critDmg, aspd: S.aspd, mspd: S.mspd, regen: S.regen, ls: S.ls, dodge: S.dodge || 0, cdrp: S.cdrp || 0, gold: S.gold });
+  const now = pick(); P.eq[slot] = it; calc(); const aft = pick(); if (keep) P.eq[slot] = keep; else delete P.eq[slot]; calc(); P.hp = hp; P.mp = mp; return [now, aft]; }
+function compareHtml(it) {
+  const [a, b] = statsWith(it), keys = ['atk', 'def', 'maxHp', 'crit', 'critDmg', 'aspd', 'mspd', 'regen', 'ls', 'cdrp', 'dodge', 'gold'], nm = { dodge: '회피' };
+  const rows = keys.map(k => { const d = (b[k] || 0) - (a[k] || 0); if (Math.abs(d) < .05) return ''; const fv = v => k === 'ls' ? (Math.round(v * LS_MUL * 100) / 100) + '%' : PCT[k] || k === 'dodge' ? (Math.round(v * 10) / 10) + '%' : k === 'regen' ? (Math.round(v * 10) / 10) : fmt(v); return `<div class="cr"><span>${nm[k] || STAT_KO[k]}</span><em>${fv(a[k] || 0)} → ${fv(b[k] || 0)}</em><b class="${d > 0 ? 'up-t' : 'dn-t'}">${d > 0 ? '▲' : '▼'}${fv(Math.abs(d))}</b></div>`; }).join('');
+  const eqd = P.eq[it.slot], eqTxt = eqd ? `<div class="cmh">지금 장착: <span style="color:${ihex(eqd)}">${esc(eqd.name)}${eqd.enh ? ' +' + eqd.enh : ''}</span><small>${Object.entries(eqd.main).map(([k, v]) => STAT_KO[k] + ' ' + statVal(k, v * (1 + .1 * eqd.enh))).join(' · ')}${eqd.affix.length ? ' · ' + eqd.affix.map(x => STAT_KO[x.k] + ' +' + statVal(x.k, x.v)).join(' · ') : ''}</small></div>` : '<div class="cmh">지금 이 부위는 비어 있어요</div>';
+  return `<div class="cmp">${eqTxt}<div class="cml">장착하면</div>${rows || '<div class="note">능력치 변화 없음</div>'}</div>`;
+}
 function itemDetail(it, where) {
   const eqd = where === 'bag' ? P.eq[it.slot] : null, m = 1 + .1 * it.enh;
   const main = Object.entries(it.main).map(([k, v]) => {
@@ -5017,7 +5027,7 @@ function itemDetail(it, where) {
   }).join('');
   const aff = it.affix.map(a => `<div class="aff">+${statVal(a.k, a.v)} ${STAT_KO[a.k]}</div>`).join('');
   const pow = it.power ? `<div class="pow">${POWERS[it.power]}</div>` : '';
-  const cmp = eqd ? `<div class="meta">장착 중: <span style="color:${ihex(eqd)}">${esc(eqd.name)}</span> · 전투력 ${(g => g > 0 ? '<span class="up-t">▲' + fmt(g) + '</span>' : g < 0 ? '<span class="dn-t">▼' + fmt(-g) + '</span>' : '같음')(cpGain(it))}</div>` : '';
+  const cmp = (where === 'bag' && !(it.wcls && it.wcls !== P.cls) ? compareHtml(it) : '') + (eqd ? `<div class="meta">장착 중: <span style="color:${ihex(eqd)}">${esc(eqd.name)}</span> · 전투력 ${(g => g > 0 ? '<span class="up-t">▲' + fmt(g) + '</span>' : g < 0 ? '<span class="dn-t">▼' + fmt(-g) + '</span>' : '같음')(cpGain(it))}</div>` : '');
   const acts = where === 'bag'
     ? `<button class="btn pri" data-act="equip" ${it.wcls && it.wcls !== P.cls ? 'disabled' : ''}>장착</button>${it.r === 5 ? '' : `<button class="btn" data-act="sell">판매 ${fmt(itemVal(it))}골드</button>`}`
     : `<button class="btn" data-act="unequip">해제</button>`;
