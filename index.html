@@ -1022,7 +1022,7 @@ const setB6 = S0 => S0.b6 + (S0.cls6 && S0.cls6[P.cls] ? ' · ' + S0.cls6[P.cls]
 const SETS = {
   blood: { name: '학살자의 유산', raid: 'gorvak', col: '#ff6a5a',
     names: { weapon: '학살자의 도살칼', helm: '학살자의 뿔투구', armor: '학살자의 피갑옷', boots: '학살자의 쇠장화', ring: '핏빛 맹세 반지', amulet: '송곳니 목걸이' },
-    b3: '공격력 +15%, 생명력 흡수 +0.6%', b6: '공격 속도 +20%, 적을 처치할 때마다 생명력 3% 회복', cls6: { mik: '엔지니어: 자동 포탑이 한 번에 2개씩 (최대 +2개)', chae: '씨프: 그림자 분신 +1체, 기술 피해 +15%' } },
+    b3: '공격력 +15%, 생명력 흡수 +0.3%', b6: '공격 속도 +20%, 적을 처치할 때마다 생명력 1.5% 회복', cls6: { mik: '엔지니어: 자동 포탑이 한 번에 2개씩 (최대 +2개)', chae: '씨프: 그림자 분신 +1체, 기술 피해 +15%' } },
   frost: { name: '서리 여왕의 의복', raid: 'isbela', col: '#8fdcff',
     names: { weapon: '서리 왕홀 단검', helm: '얼음 왕관', armor: '서리 비단 로브', boots: '눈보라 장화', ring: '빙결의 반지', amulet: '겨울 심장 목걸이' },
     b3: '생명력 +20%, 방어력 +25', b6: '받는 피해 -20%, 맞으면 25% 확률로 주변 적 빙결', cls6: { mik: '엔지니어: 화염 방사기가 아이스 방사기로 (피해 +30%, 빙결)', chae: '씨프: 그림자 걸음 연타 +3회, 기술 피해 +15%' } },
@@ -1053,10 +1053,10 @@ const POWERS = {
   whirl: '(옛 효과) 화염 방사기·다이너마이트 강화로 바뀌었어요',
   flameLen: '엔지니어: 화염 방사기 사거리 +40%',
   dynaR: '엔지니어: 다이너마이트 폭발 범위 +40%',
-  vamp: '생명력 흡수 +0.8%',
+  vamp: '생명력 흡수 +0.4%',
   haste: '적 처치 시 3초간 이동·공격 속도 +30%',
   soulburst: '처치한 적의 혼이 근처 적을 쫓아가 공격력 120% 피해',
-  reap: '기본 공격 4번마다 혼의 낫이 휘몰아쳐 주변 적에게 공격력 250% 피해, 맞힌 적마다 생명력 1% 회복',
+  reap: '기본 공격 4번마다 혼의 낫이 휘몰아쳐 주변 적에게 공격력 250% 피해, 맞힌 적마다 생명력 0.5% 회복',
 };
 const LEG = {
   weapon: [['잿불 군주의 송곳니', 'explode'], ['쌍둥이 달의 칼날', 'multi']],
@@ -3225,6 +3225,7 @@ function damageMob(e, base, canCrit = true, flat = false, kb = flat ? 0 : 1) {
   if (e.state !== 'return') e.state = 'chase';
   if (crit) texts.push({ x: e.x + rand(-6, 6), y: e.y - e.r - 12, txt: fmt(dmg), col: '#ff3020', t: 0, size: 30, vx: rand(-10, 10), crit: 1 });
   else addText(e.x + rand(-6, 6), e.y - e.r - 8, String(dmg), '#ffffff', 14);
+  P.lastAtk = GT;
   if (S.ls > 0 && !flat) { const h0 = P.hp; P.hp = Math.min(S.maxHp, P.hp + dmg * S.ls * LS_MUL / 100); P.lsAcc = (P.lsAcc || 0) + (P.hp - h0); }
   burst(e.x, e.y, e.d.col, 4, 90, .3, 2.5);
   if (e.hp <= 0) kill(e);
@@ -3241,7 +3242,7 @@ const iceMul = () => 1 + (skLv('iceSword') ? pickL(SKILLS.iceSword.dm, skLv('ice
 function kill(e) {
   e.hp = 0; addCorpse(e); SFX.kill(e.boss);
   const d = e.d;
-  let xp = d.xp * (e.boss ? 1 : (1 + .25 * (e.lv - 1))) * (e.elite ? 3 : 1);
+  let xp = e.summoner ? 0 : d.xp * (e.boss ? 1 : (1 + .25 * (e.lv - 1))) * (e.elite ? 3 : 1);
   if (!e.boss && e.lv < P.lv - 6) xp *= .25;
   gainXp(Math.round(xp * .7));
   burst(e.x, e.y, d.col, e.boss ? 60 : 16, e.boss ? 320 : 170, e.boss ? 1 : .6, e.boss ? 5 : 3.5);
@@ -3261,7 +3262,7 @@ function kill(e) {
       log('최종보스 심연의 군주를 쓰러뜨렸습니다!', '#ffd76a');
     } else log(`${d.name} 처치! 보스는 2분 뒤 다시 나타납니다`, '#ffb469');
     shake = 10;
-  } else {
+  } else if (!e.summoner) {
     if (e.elite) { if (Math.random() < .12) dropLoot(e.x, e.y, 'item', makeItem(e.lv + 1, .1, 0)); }
     else if (Math.random() < .009) dropLoot(e.x, e.y, 'item', makeItem(e.lv));
     if (Math.random() < .015) dropLoot(e.x, e.y, 'pot', 1);
@@ -3274,16 +3275,16 @@ function kill(e) {
   questKill(e);
   if (!e.summoner || !e.summoner.d.raid) { const mul = e.boss ? 60 : e.elite ? 3 : 1; if (Math.random() < .005 * mul) dropLoot(e.x, e.y, 'mat', 'shard'); if (Math.random() < .005 * mul) dropLoot(e.x, e.y, 'mat', 'dust'); }
   if (e.frz > 0 && skLv('iceSword') >= 6) { addSfx('shock', e.x, e.y, 220, .45, { g0: .4, g1: 1.15 }); for (const m of mobs) if (m !== e && m.hp > 0 && !m.boss && Math.hypot(m.x - e.x, m.y - e.y) < 130) { m.frz = 1.2; m.kbx = m.kby = 0; } }
-  if (skLv('vamp') >= 6 && !P.dead) P.hp = Math.min(S.maxHp, P.hp + S.maxHp * .01);
+  if (skLv('vamp') >= 6 && !P.dead) P.hp = Math.min(S.maxHp, P.hp + S.maxHp * .005);
   if (S.powers.soulburst) { let t = null, bd = 420; for (const m of mobs) { if (m === e || m.hp <= 0) continue; const dd = Math.hypot(m.x - e.x, m.y - e.y); if (dd < bd) { bd = dd; t = m; } } if (t) pshots.push({ kind: 'soul', x: e.x, y: e.y - 14, vx: rand(-120, 120), vy: -200, life: 1.6, dmg: S.atk * 1.2, pierce: 0, hit: new Set(), home: t }); }
-  if (S.setFx && S.setFx.blood6 && !P.dead) P.hp = Math.min(S.maxHp, P.hp + S.maxHp * .03);
+  if (S.setFx && S.setFx.blood6 && !P.dead) P.hp = Math.min(S.maxHp, P.hp + S.maxHp * .015);
   if (!e.summoner) {
     P.combo++; P.comboT = 3;
     if (P.combo === 50 || (P.combo > 50 && P.combo % 100 === 50)) { P.frenzy = 8; showBanner('광폭화!', `${P.combo} 연속 처치 · 8초간 공격·이동 속도 +40%`, 2); rings.push({ x: P.x, y: P.y, t: 0, life: .6, r: 120, col: '255,80,40' }); shake = Math.max(shake, 5); }
     if (P.combo % 100 === 0) { showBanner('천벌!', `${P.combo} 연속 처치 · 화면의 모든 적에게 번개`, 2); shake = 12; for (const m of mobs) if (m.hp > 0 && m !== e && Math.abs(m.x - P.x) < 520 && Math.abs(m.y - P.y) < 420) { strikes.push({ x: m.x, y: m.y, t: -Math.random() * .2, seed: Math.random() * 99 }); damageMob(m, S.atk * (m.boss ? 2 : 4), false); } }
   }
-  if (e.boss || (e.elite && Math.random() < .25)) dropLoot(e.x, e.y, 'chest', 1);
-  { const ch = d.raid ? d.skinCh : e.boss ? .12 : e.elite ? .015 : .0015; if (Math.random() < ch) { const id = rollSkin(d.final ? 3 : e.boss ? 2 : 1); if (id) dropLoot(e.x, e.y, 'skin', id); } }
+  if (!e.summoner && (e.boss || (e.elite && Math.random() < .25))) dropLoot(e.x, e.y, 'chest', 1);
+  if (!e.summoner) { const ch = d.raid ? d.skinCh : e.boss ? .12 : e.elite ? .015 : .0015; if (Math.random() < ch) { const id = rollSkin(d.final ? 3 : e.boss ? 2 : 1); if (id) dropLoot(e.x, e.y, 'skin', id); } }
 }
 function dropLoot(x, y, kind, v) {
   const a = Math.random() * Math.PI * 2, sp = rand(40, 110);
@@ -3334,7 +3335,7 @@ const AWAKEN = {
   power: { name: '광전사', desc: '치명타 피해 +25%' },
   vigor: { name: '불굴', desc: '받는 피해 -10%' },
   haste: { name: '시간 가속', desc: '공격 속도 +15%' },
-  vamp: { name: '피의 군주', desc: '적을 처치할 때마다 생명력 1% 회복' },
+  vamp: { name: '피의 군주', desc: '적을 처치할 때마다 생명력 0.5% 회복' },
   crit: { name: '암살자의 눈', desc: '치명타 피해 +30%' },
   magnet: { name: '황금 손', desc: '골드 획득 +30%' },
 };
@@ -3453,7 +3454,7 @@ function thfTick(dt) {
   if (P.stormT > 0 && !P.dead) {
     P.stormT -= dt; P.stormTick -= dt; P.stormSnd -= dt; P.whirlT = .2;
     if (P.stormSnd <= 0) { P.stormSnd = .28; SFX.whirl(); }
-    if (P.stormTick <= 0) { P.stormTick = .12; let hits = 0; for (const m of mobs) if (m.hp > 0 && Math.hypot(m.x - P.x, m.y - P.y) < P.stormR + m.r) { const k0 = SFXK; SFXK = 'blade'; DSRC = 'tStorm'; damageMob(m, P.stormDmg, true, false, .4); SFXK = k0; DSRC = null; hits++; } if (P.stormAw && hits) P.hp = Math.min(S.maxHp, P.hp + S.maxHp * .002 * Math.min(hits, 6)); }
+    if (P.stormTick <= 0) { P.stormTick = .12; let hits = 0; for (const m of mobs) if (m.hp > 0 && Math.hypot(m.x - P.x, m.y - P.y) < P.stormR + m.r) { const k0 = SFXK; SFXK = 'blade'; DSRC = 'tStorm'; damageMob(m, P.stormDmg, true, false, .4); SFXK = k0; DSRC = null; hits++; } if (P.stormAw && hits) P.hp = Math.min(S.maxHp, P.hp + S.maxHp * .001 * Math.min(hits, 6)); }
     if (P.stormAw && Math.random() < dt * 10) { const a = rand(0, TAU); THFO.push({ k: 'dag', src: 'tStorm', x: P.x, y: P.y - 16, vx: Math.cos(a) * 620, vy: Math.sin(a) * 620, t: 0, life: .35, dmg: P.stormDmg * 1.2, hit: new Set(), pierce: 1, small: 1 }); }
   }
   for (const o of THFO) {
@@ -3700,7 +3701,7 @@ const hasteMul = () => (P.haste > 0 ? 30 : 0) + (P.frenzy > 0 ? 40 : 0) + (P.ste
 function reapNova() {
   addSfx('slash', P.x, P.y - 10, 420, .45, { spin: 10, sq: .6, g0: .7, g1: 1.15 }); rings.push({ x: P.x, y: P.y, t: 0, life: .45, r: 210, col: '120,255,190' }); shake = Math.max(shake, 5);
   let n = 0; for (const m of mobs) if (m.hp > 0 && Math.hypot(m.x - P.x, m.y - P.y) < 210 + m.r) { damageMob(m, S.atk * 2.5, true, false, 1.5); n++; }
-  if (n) { P.hp = Math.min(S.maxHp, P.hp + S.maxHp * .01 * n); burst(P.x, P.y - 20, '#8fffd8', 20, 200, .6, 3); }
+  if (n) { P.hp = Math.min(S.maxHp, P.hp + S.maxHp * .005 * n); burst(P.x, P.y - 20, '#8fffd8', 20, 200, .6, 3); }
 }
 function tryAttack(aim) {
   if (P.atkT > 0 || P.dead) return;
@@ -3863,7 +3864,7 @@ function updatePlayer(dt) {
   else if (attackHeld || keys.Space || keys.KeyJ) tryAttack(null);
   else if (!P.dash && nearestMob(CLS().ranged ? 330 : 58)) tryAttack(null); // 자동 공격: 사거리 안에 몹이 있으면
   // 재생
-  const ooc = GT - P.lastHurt > 5 ? S.maxHp * .015 : 0;
+  const ooc = GT - P.lastHurt > 5 && GT - (P.lastAtk || -99) > 5 ? S.maxHp * .015 : 0;
   P.hp = Math.min(S.maxHp, P.hp + (S.regen + ooc) * S.regenMul * dt);
   P.mp = Math.min(S.maxMp, P.mp + (3 + S.maxMp * .02) * S.mpMul * dt);
   const z = zoneAt(P.x, P.y);
@@ -4997,7 +4998,7 @@ let panel = null, sel = null, forgeMsg = '';
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 function openPanel(kind) { panel = kind; if (kind === 'inv') { sel = null; P._invTab = 'eq'; } forgeMsg = ''; $('#panel').hidden = false; renderPanel(); }
 function closePanel() { panel = null; $('#panel').hidden = true; save(); }
-const LS_MUL = .2;
+const LS_MUL = .1;
 const statVal = (k, v) => k === 'ls' ? `${Math.round(v * LS_MUL * 100) / 100}%` : PCT[k] ? `${(Math.round(v * 10) / 10)}%` : k === 'regen' ? `${(Math.round(v * 10) / 10)}` : fmt(v);
 function itemDetail(it, where) {
   const eqd = where === 'bag' ? P.eq[it.slot] : null, m = 1 + .1 * it.enh;
