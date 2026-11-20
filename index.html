@@ -940,9 +940,9 @@ const MOB_ART = {
 const CLASSES = {
   chae: {
     name: '씨프', tag: '키가 작아서 빠름', col: '#3fbf9a', r: 11, scale: .78,
-    perks: ['이동 속도 +25%', '공격 속도 +15%', '생명력 +20% · 기본 공격 피해 +50%', '공격 12% 확률로 회피 · 방어력 +5', '공격이 독을 쌓음 (5중첩 시 독 폭발)'],
+    perks: ['이동 속도 +25%', '공격 속도 +15%', '생명력 +20% · 기본 공격 피해 +50%', '공격 8% 확률로 회피 · 방어력 +5', '공격이 독을 쌓음 (5중첩 시 독 폭발)'],
     rate: { 속도: 5, 마법: 1, 회피: 3, 지구력: 2, 힘: 2 },
-    mods: s => { s.mspd += 25; s.aspd += 15; const h0 = s.maxHp * .95; s.maxHp = h0 * 1.2; s.cpHpEx = s.maxHp - h0; s.dodge += 12; s.def += 5; },
+    mods: s => { s.mspd += 25; s.aspd += 15; const h0 = s.maxHp * .95; s.maxHp = h0 * 1.2; s.cpHpEx = s.maxHp - h0; s.dodge += 8; s.def += 5; },
   },
   min: {
     name: '위자드', tag: '지능이 좋음 · 마법 피해', col: '#7b6cff', r: 13, scale: 1, ranged: true,
