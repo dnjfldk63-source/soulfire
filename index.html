@@ -1219,7 +1219,7 @@ function calc() {
 function combatPower(s = S) {
   const off = s.atk * (1 + Math.min(75, s.crit) / 100 * s.critDmg / 100) * (1 + s.ls * .2 / 50);
   let skl = 0; for (const k of Object.keys(P.sk || {})) skl += P.sk[k];
-  return Math.round(off * 54 * (1 + Math.min(40, s.cdrp || 0) / 100 * .8) + s.aspd * 20 + s.mspd * 10 + s.def * 30 + s.maxHp * .1 + Math.min(60, s.dodge || 0) * 100 + s.regen * 12 + skl * 20 + Object.keys(s.powers || {}).length * 60 + Object.keys(s.setFx || {}).length * 300);
+  return Math.round(off * 32 * (1 + Math.min(40, s.cdrp || 0) / 100 * .8) + s.aspd * 20 + s.mspd * 10 + s.def * 30 + s.maxHp * .1 + Math.min(60, s.dodge || 0) * 100 + s.regen * 12 + skl * 20 + Object.keys(s.powers || {}).length * 60 + Object.keys(s.setFx || {}).length * 300);
 }
 function cpWith(it, slot) {
   slot = slot || it.slot; const keep = P.eq[slot], hp = P.hp, mp = P.mp;
@@ -4466,7 +4466,7 @@ function drawMob(e) {
     ctx.fillStyle = e.elite ? '#ffd24a' : '#e0473a'; ctx.fillRect(x - w / 2, top - 8, w * e.hp / e.maxHp, 4);
   }
   if (e.elite) label(`정예 ${d.name} Lv ${e.lv}`, x, top - 12, '#ffd76a', 11);
-  else if (e.boss) label(d.name, x, top - 10, '#ffb08a', 13, 700);
+  else if (e.boss) { label(d.name, x, top - 10, '#ffb08a', 13, 700); if (RAID && e === RAID.boss && !RAID.done) { const R0 = RAIDS[RAID.k], tt = GT - RAID.t0, lf = R0.enr - tt, fm = v => Math.floor(v / 60) + ':' + String(Math.floor(v % 60)).padStart(2, '0'); label(lf > 0 ? `광폭화까지 ${fm(lf)}` : `광폭화 ×${RAID.mult}`, x, top - 28, lf > 0 ? (lf < 20 ? '#ffb040' : '#ffd76a') : '#ff4a3a', 13, 800); } }
   else if (e.hp < e.maxHp || Math.hypot(e.x - P.x, e.y - P.y) < 120) label(`Lv ${e.lv}`, x, top - 12, e.lv > P.lv + 3 ? '#ff7a6a' : '#cfc7b8', 10);
 }
 // ───────── 캐릭터 일러스트 (선택 화면·게임 공용, 발끝 = 원점, 키 약 120) ─────────
@@ -4928,10 +4928,10 @@ function updHud() {
   $('#lvl').innerHTML = `Lv ${P.lv} <small style="color:${CLS().col}">${CLS().name}</small>`;
   $('#gold').textContent = `${fmt(P.gold)} 골드`; { const cp = combatPower(); if (cp !== P._cpShown) { if (P._cpShown != null && started) cpToast(P._cpShown, cp); P._cpShown = cp; $('#cp').innerHTML = `전투력 <b>${fmt(cp)}</b>`; } }
   $('#pts').textContent = P.pts ? `능력치 포인트 ${P.pts}` : '';
-  $('#pot-n').textContent = P.pots; syncStepTog(); { const si = $('#swarmInfo'); if (RAID) { const R = RAIDS[RAID.k], t = RAID.done ? RAID.tm : GT - RAID.t0, f = v => Math.floor(v / 60) + ':' + String(Math.floor(v % 60)).padStart(2, '0'); si.style.opacity = 1; si.textContent = RAID.done ? `레이드 클리어 ${f(t)} · 나가는 문으로` : RAID.mult > 1 ? `${R.name} ${f(t)} · 광폭화 ×${RAID.mult}` : `${R.name} ${f(t)} · 광폭화까지 ${f(R.enr - t)}`; si.style.color = RAID.mult > 1 ? '#ff4a2a' : '#ffb48a'; } else { si.style.opacity = swarmOn ? 1 : 0; si.style.color = ''; if (swarmOn) si.textContent = `무리 습격 · 남은 적 ${swarmOn.left}`; } }
+  $('#pot-n').textContent = P.pots; syncStepTog(); { const si = $('#swarmInfo'); if (RAID) { const R = RAIDS[RAID.k], t = RAID.done ? RAID.tm : GT - RAID.t0, f = v => Math.floor(v / 60) + ':' + String(Math.floor(v % 60)).padStart(2, '0'); si.style.opacity = RAID.done ? 1 : 0; si.textContent = RAID.done ? `레이드 클리어 ${f(t)} · 나가는 문으로` : ''; si.style.color = RAID.mult > 1 ? '#ff4a2a' : '#ffb48a'; } else { si.style.opacity = swarmOn ? 1 : 0; si.style.color = ''; if (swarmOn) si.textContent = `무리 습격 · 남은 적 ${swarmOn.left}`; } }
   { const qt = $('#qTrack'), qb = $('#qBody'); const h = RAID ? '' : questHud(); if (h) { if (qb.innerHTML !== h) qb.innerHTML = h; qt.hidden = false; } else qt.hidden = true; }
   { const ce = $('#combo'); if (P.combo >= 5) { ce.style.opacity = 1; ce.querySelector('b').textContent = P.combo; ce.querySelector('small').textContent = P.frenzy > 0 ? '광폭화 ' + Math.ceil(P.frenzy) + '초' : P.combo < 50 ? '연속 처치 · 50 광폭화' : '연속 처치 · 100마다 천벌'; ce.querySelector('i').style.transform = 'scaleX(' + Math.max(0, P.comboT / 3) + ')'; ce.classList.toggle('fr', P.frenzy > 0); } else ce.style.opacity = 0; }
-  { const bb = $('#bossbar'), sb = $('#stat').getBoundingClientRect().bottom, bbb = !bb.hidden ? bb.getBoundingClientRect().bottom : 0; $('#qTrack').style.top = Math.round(Math.max(sb, bbb) + 8) + 'px'; }
+  { const bb = $('#bossbar'), st = $('#stat').getBoundingClientRect(), sb = st.bottom; if (!bb.hidden) { const r0 = bb.getBoundingClientRect(); if (r0.left < st.right && r0.top < sb) bb.style.top = Math.round(sb + 6) + 'px'; } const bbb = !bb.hidden ? bb.getBoundingClientRect().bottom : 0; $('#qTrack').style.top = Math.round(Math.max(sb, bbb) + 8) + 'px'; }
   { const ids = Object.keys(P.sk || {}), tray = $('#skTray'), key = ids.map(i => i + P.sk[i]).join(',');
     if (tray.dataset.k !== key) { tray.dataset.k = key; tray.innerHTML = ids.map(i => `<span class="skc${P.sk[i] >= SK_AW ? ' aw' : ''}" data-id="${i}">${P.sk[i] >= SK_AW ? AWAKEN[i].name : SKILLS[i].name}<b>${P.sk[i]}</b></span>`).join(''); } }
   $('#bag-n').textContent = `${P.bag.length}`;
@@ -4981,6 +4981,7 @@ function interact() {
   if (it.kind === 'houseOut') { leaveHouse(); return; }
   if (it.kind === 'chest') { openLock(); return; }
   if (it.kind === 'gateN') { teleportTo({ tx: CX, ty: MH - 11, map: 'snow' }); showBanner('얼어붙은 북부', '더 강한 적이 기다립니다 · 권장 Lv 36+', 2.6); return; }
+  if (it.kind === 'travel') { openPanel('travel'); return; }
   if (it.kind === 'fish') { openFish(); return; }
   if (it.kind === 'gateS') { teleportTo({ tx: CX, ty: 8, map: 'main' }); return; }
   npcOpen(it.kind);
