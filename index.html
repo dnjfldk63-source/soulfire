@@ -1005,8 +1005,8 @@ const RAR = [
 const STAT_KO = { atk: '공격력', def: '방어력', maxHp: '생명력', crit: '치명타 확률', critDmg: '치명타 피해', aspd: '공격 속도', mspd: '이동 속도', regen: '초당 생명력 재생', gold: '골드 획득', ls: '생명력 흡수', cdrp: '재사용 대기시간 감소' };
 const PCT = { crit: 1, critDmg: 1, aspd: 1, mspd: 1, gold: 1, ls: 1, cdrp: 1 };
 const AFF = {
-  atk: { p: '날카로운', roll: l => 1 + l * .5 },
-  def: { p: '견고한', roll: l => 1 + l * .35 },
+  atk: { p: '날카로운', roll: l => 1 + l * .5, noRoll: 1 },
+  def: { p: '견고한', roll: l => 1 + l * .35, noRoll: 1 },
   maxHp: { p: '활기찬', roll: l => 6 + l * 3.5 },
   crit: { p: '정밀한', roll: () => rand(2, 6) },
   critDmg: { p: '잔혹한', roll: () => rand(10, 30) },
@@ -1084,7 +1084,7 @@ function makeItem(ilvl, rb = 0, minR = 0, slot) {
     case 'ring': main.atk = Math.round((1 + ilvl * .6) * q); main.crit = Math.round(2 * q * 10) / 10; break;
     case 'amulet': main.maxHp = Math.round((10 + ilvl * 5) * q); break;
   }
-  const n = randi(R.aff[0], R.aff[1]), keys = Object.keys(AFF).filter(k => !AFF[k].minR || r >= AFF[k].minR), affix = [];
+  const n = randi(R.aff[0], R.aff[1]), keys = Object.keys(AFF).filter(k => !AFF[k].noRoll && (!AFF[k].minR || r >= AFF[k].minR)), affix = [];
   while (affix.length < n) {
     const k = pick(keys); if (affix.some(a => a.k === k)) continue;
     let v = AFF[k].roll(ilvl); v = AFF[k].dec ? Math.round(v * 10) / 10 : Math.round(v);
