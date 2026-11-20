@@ -598,7 +598,6 @@ body.touch #recallBar{bottom:calc(env(safe-area-inset-bottom,0px) + 150px)}
   <div class="rr-rank">S</div>
   <div class="rr-stats"></div>
   <div class="rr-dmg"></div>
-  <div class="rr-loot"></div>
   <div class="rr-b"><button class="btn pri" id="rrTown">보상 챙기고 마을로</button><button class="btn" id="rrStay">조금 더 둘러보기</button></div>
 </div></div>
 <div id="cut" hidden><div class="cbar t"></div><div class="cbar b"></div><div class="cglow"></div><div class="cstreak"></div><img id="cutImg" alt=""><div class="ctext"><div class="ceb">RAID BOSS</div><div class="cname" id="cutName"></div></div><div class="cflash"></div><div class="cskip">탭하면 건너뛰기</div></div>
@@ -1422,7 +1421,6 @@ function showRaidResult() {
   { const D = DMGLOG || {}, d0 = RAID.dlog0 || {}, rows = Object.keys(D).map(k => [k, D[k] - (d0[k] || 0)]).filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]), tot = rows.reduce((a, x) => a + x[1], 0) || 1;
     const nm = k => k === 'basic' ? '기본 공격' : k === 'poison' ? '독' : SKILLS[k] ? SKILLS[k].name : k;
     el.querySelector('.rr-dmg').innerHTML = `<div class="lbl">기술별 피해 · 총 ${fmt(tot)} (초당 ${fmt(tot / Math.max(1, tm))})</div>` + rows.map(([k, v]) => `<div class="rd"><span>${nm(k)}</span><i style="width:${(v / rows[0][1] * 100).toFixed(1)}%"></i><b>${Math.round(v / tot * 100)}% · ${fmt(v / Math.max(1, tm))}/s</b></div>`).join(''); }
-  el.querySelector('.rr-loot').innerHTML = lootHtml(rrLootList(), '바닥에 떨어진 보상');
   el.hidden = false; el.classList.remove('play'); void el.offsetWidth; el.classList.add('play');
 }
 function raidWin(e) {
