@@ -2728,6 +2728,7 @@ function engTick(dt) {
   DSRC = null;
   ENGO = ENGO.filter(o => !o.done || (o.k === 'dyna' && o.t < o.fl + o.fuse + .01));
   // 화염 방사기
+  if (!(P.flameT > 0)) P.flameHist = null;
   if (P.flameT > 0) { P.flameT -= dt; P.flameTick = (P.flameTick || 0) - dt;
     { const tg = nearestMob(P.flameR + 80); if (tg) { const ta = Math.atan2(tg.y - P.y, tg.x - P.x); let d = ta - P.flameA; while (d > Math.PI) d -= TAU; while (d < -Math.PI) d += TAU; P.flameA += d * Math.min(1, dt * 9); } P.face = P.flameA; }
     const a = P.flameA, R = P.flameR, blue = P.flameAw;
@@ -2740,8 +2741,14 @@ function engTick(dt) {
 function engDraw() {
   if (P.flameT > 0 && !P.dead) { const a = P.flameA, R = P.flameR * 1.2, blue = P.flameAw, k = Math.min(1, (P.flameDur - P.flameT) / .14, P.flameT / .18), fr = Math.floor(GT * 16) % 3, im = ENG_IMG['jet' + fr], im2 = ENG_IMG['jet' + ((fr + 1) % 3)];
     const nx = P.x + Math.cos(a) * 20, ny = P.y - 22 + Math.sin(a) * 20;
+    { const H0 = P.flameHist = P.flameHist || []; if (!H0.length || GT - H0[H0.length - 1].t > .004) H0.push({ t: GT, x: nx, y: ny, a }); while (H0.length && GT - H0[0].t > .45) H0.shift(); }
     ctx.save(); ctx.translate(nx, ny); ctx.rotate(a); if (Math.cos(a) < 0) ctx.scale(1, -1); ctx.globalCompositeOperation = 'lighter'; const ice = P.flameIce; if (ice) ctx.filter = 'hue-rotate(185deg) saturate(.55) brightness(1.7)'; else if (blue) ctx.filter = 'hue-rotate(190deg) saturate(1.5) brightness(1.15)';
-    if (im) { const L = R * (.35 + .65 * k), H = L * im.height / im.width; ctx.globalAlpha = .95; ctx.drawImage(im, -4, -H / 2, L, H); if (im2) { ctx.globalAlpha = .45; ctx.drawImage(im2, -4, -H * .62, L * 1.06, H * 1.24); } }
+    if (im) { const L = R * (.35 + .65 * k), H = L * im.height / im.width, N = 12, flip = Math.cos(a) < 0 ? -1 : 1, Hs = P.flameHist || [];
+      const past = lag => { const tt = GT - lag; for (let q = Hs.length - 1; q >= 0; q--) if (Hs[q].t <= tt) return Hs[q]; return Hs[0] || { x: nx, y: ny, a }; };
+      const ca = Math.cos(-a), sa = Math.sin(-a), loc = (wx, wy) => { const dx = wx - nx, dy = wy - ny; return [dx * ca - dy * sa, (dx * sa + dy * ca) * flip]; };
+      const pts = []; for (let q = 0; q <= N; q++) { const f = q / N, d = -4 + L * f, h = past(f * .22), wx = h.x + Math.cos(h.a) * d, wy = h.y + Math.sin(h.a) * d; pts.push(loc(wx, wy)); }
+      const strip = (img, alpha, hs, yo) => { ctx.globalAlpha = alpha; for (let q = 0; q < N; q++) { const [x0, y0] = pts[q], [x1, y1] = pts[q + 1], seg = Math.hypot(x1 - x0, y1 - y0) + 1.5, ang = Math.atan2(y1 - y0, x1 - x0), sw = img.width / N; ctx.save(); ctx.translate(x0, y0); ctx.rotate(ang); ctx.drawImage(img, q * sw, 0, sw + 1, img.height, 0, -H * hs / 2 + yo, seg, H * hs); ctx.restore(); } };
+      strip(im, .95, 1, 0); if (im2) strip(im2, .45, 1.24, 0); }
     ctx.filter = 'none'; ctx.globalAlpha = 1; const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 34); g.addColorStop(0, ice ? 'rgba(255,255,255,.95)' : blue ? 'rgba(210,245,255,.95)' : 'rgba(255,245,190,.95)'); g.addColorStop(.4, ice ? 'rgba(170,230,255,.55)' : blue ? 'rgba(80,180,255,.5)' : 'rgba(255,150,40,.5)'); g.addColorStop(1, 'rgba(255,100,20,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, 34, 0, TAU); ctx.fill();
     ctx.restore();
     ctx.save(); ctx.globalCompositeOperation = 'lighter'; const gx = P.x + Math.cos(a) * R * .5, gy = P.y + Math.sin(a) * R * .5, lg = ctx.createRadialGradient(gx, gy, 0, gx, gy, R * .7); lg.addColorStop(0, blue ? 'rgba(90,170,255,.22)' : 'rgba(255,120,30,.22)'); lg.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = lg; ctx.fillRect(gx - R, gy - R, R * 2, R * 2); ctx.restore(); }
