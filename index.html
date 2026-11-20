@@ -1219,7 +1219,7 @@ function calc() {
 function combatPower(s = S) {
   const off = s.atk * (1 + Math.min(75, s.crit) / 100 * s.critDmg / 100) * (1 + s.ls * .2 / 50);
   let skl = 0; for (const k of Object.keys(P.sk || {})) skl += P.sk[k];
-  return Math.round(off * 32 * (1 + Math.min(40, s.cdrp || 0) / 100 * .8) + s.aspd * 20 + s.mspd * 10 + s.def * 30 + s.maxHp * .1 + Math.min(60, s.dodge || 0) * 100 + s.regen * 12 + skl * 20 + Object.keys(s.powers || {}).length * 60 + Object.keys(s.setFx || {}).length * 300);
+  return Math.round(off * 32 * (1 + Math.min(40, s.cdrp || 0) / 100 * .8) + s.aspd * 20 + s.mspd * 10 + s.def * 55 + s.maxHp * .1 + Math.min(60, s.dodge || 0) * 100 + s.regen * 12 + skl * 20 + Object.keys(s.powers || {}).length * 60 + Object.keys(s.setFx || {}).length * 300);
 }
 function cpWith(it, slot) {
   slot = slot || it.slot; const keep = P.eq[slot], hp = P.hp, mp = P.mp;
