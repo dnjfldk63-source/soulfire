@@ -947,7 +947,7 @@ const CLASSES = {
     mods: s => { s.atk *= 1.25; s.critDmg += 30; s.mspd -= 5; },
   },
 };
-const CLS_ORDER = ['chae', 'min', 'mik', 'kok', 'mun'];
+const CLS_ORDER = ['chae', 'min', 'mik', 'kok', 'mun'], CLS_LOCK = new Set(['min', 'kok', 'mun']);
 const CLS = () => CLASSES[P.cls] || CLASSES.mun;
 
 const SLOTS = ['weapon', 'helm', 'armor', 'boots', 'ring', 'amulet'];
@@ -2340,7 +2340,45 @@ const WSEG = {
     w: [[[40, 95, 5, 105, 4], [100, 95, 115, 88, 3]], [[40, 95, 5, 105, 4]], [[25, 40, 0, 55, 4]], [[40, 95, 5, 105, 4]], [[40, 95, 5, 105, 4]], [[25, 40, 0, 55, 4]]] },
   chae5: { a: [[[15, 140, 50, 125, 6], [115, 110, 150, 90, 5]], [[5, 55, 45, 40, 6], [100, 20, 140, 40, 5]], [[5, 55, 50, 40, 6]], [[20, 130, 60, 120, 6], [120, 105, 150, 100, 4]]], w: Array(6).fill([[10, 125, 110, 115, 6]]) },
 };
-function drawWeaponGlow(g, k, walking, fi, f, u, tier, t) {
+// 무기 픽셀 마스크: 무기 선분 근처에서 '끝부분(늘 보이는 쪽) 색'과 닮은 픽셀만 → 몸 뒤에 가려진 부분은 빛나지 않음
+const WMASK = new Map();
+function weaponMask(key, img, f, segs) {
+  let c = WMASK.get(key); if (c !== undefined) return c;
+  try {
+    const W = f.w, H = f.h, cv = document.createElement('canvas'); cv.width = W; cv.height = H; const x = cv.getContext('2d', { willReadFrequently: true }); x.drawImage(img, f.sx, 0, W, H, 0, 0, W, H);
+    const D = x.getImageData(0, 0, W, H), d = D.data, pal = [];
+    const dseg = (px, py, s0) => { const [x1, y1, x2, y2] = s0, vx = x2 - x1, vy = y2 - y1, L2 = vx * vx + vy * vy || 1, q = Math.max(0, Math.min(1, ((px - x1) * vx + (py - y1) * vy) / L2)); return [Math.hypot(px - x1 - vx * q, py - y1 - vy * q), q]; };
+    for (const s0 of segs) for (let k = 0; k < 60; k++) { const q = .62 + Math.random() * .38, px = Math.round(s0[0] + (s0[2] - s0[0]) * q + (Math.random() - .5) * s0[4]), py = Math.round(s0[1] + (s0[3] - s0[1]) * q + (Math.random() - .5) * s0[4]); if (px < 0 || py < 0 || px >= W || py >= H) continue; const i = (py * W + px) * 4; if (d[i + 3] > 160) pal.push([d[i], d[i + 1], d[i + 2]]); }
+    const out = x.createImageData(W, H), o = out.data; let n = 0;
+    if (pal.length > 6) for (let py = 0; py < H; py++) for (let px = 0; px < W; px++) {
+      const i = (py * W + px) * 4; if (d[i + 3] < 120) continue; let near = false;
+      for (const s0 of segs) { const [dd] = dseg(px, py, s0); if (dd <= s0[4] * 1.35 + 1) { near = true; break; } } if (!near) continue;
+      let best = 1e9; for (const p of pal) { const e = (d[i] - p[0]) ** 2 + (d[i + 1] - p[1]) ** 2 + (d[i + 2] - p[2]) ** 2; if (e < best) best = e; }
+      if (best < 34 * 34) { o[i] = o[i + 1] = o[i + 2] = 255; o[i + 3] = 255; n++; }
+    }
+    if (n < 4) c = null; else { x.clearRect(0, 0, W, H); x.putImageData(out, 0, 0); c = cv; }
+  } catch (e) { c = null; }
+  WMASK.set(key, c); return c;
+}
+const WTINT = new Map();
+function tintMask(key, m, col) { const k = key + '|' + col; let c = WTINT.get(k); if (c) return c; c = document.createElement('canvas'); c.width = m.width; c.height = m.height; const x = c.getContext('2d'); x.drawImage(m, 0, 0); x.globalCompositeOperation = 'source-in'; x.fillStyle = 'rgb(' + col + ')'; x.fillRect(0, 0, c.width, c.height); WTINT.set(k, c); return c; }
+function drawWeaponGlow(g, k, walking, fi, f, u, tier, t, img) {
+  { const W0 = WSEG[k] || WSEG[SKIN_BASE[k] || k], segs = W0 && (walking ? W0.w : W0.a)[fi];
+    const mk = img && segs && segs.length ? weaponMask(k + (walking ? 'w' : 'a') + fi, img, f, segs) : null;
+    if (mk) {
+      const col = tier[1], top = tier[0] >= 10, mid = tier[0] >= 7, pulse = .7 + Math.sin(t * (top ? 8 : 5)) * .3, tm = tintMask(k + (walking ? 'w' : 'a') + fi, mk, col);
+      const X = f.ox * u, Y = f.oy * u, Wd = f.w * u, Hd = f.h * u;
+      g.save(); g.globalCompositeOperation = 'lighter';
+      for (const [bl, a] of top ? [[5, .7], [2.5, .8], [0, .75]] : mid ? [[3.5, .55], [1.5, .6], [0, .55]] : [[2.5, .4], [0, .45]]) { g.globalAlpha = a * pulse; g.filter = bl ? 'blur(' + (bl * u * 1.4).toFixed(1) + 'px)' : 'none'; g.drawImage(tm, X, Y, Wd, Hd); }
+      g.filter = 'none'; g.globalAlpha = (top ? .55 : mid ? .35 : .2) * pulse; g.drawImage(mk, X, Y, Wd, Hd);
+      g.restore();
+      if (g === ctx && mid && Math.random() < (top ? .5 : .18)) { const s0 = segs[Math.floor(Math.random() * segs.length)], q = .6 + Math.random() * .4, m = g.getTransform(), p = m.transformPoint(new DOMPoint((f.ox + s0[0] + (s0[2] - s0[0]) * q) * u, (f.oy + s0[1] + (s0[3] - s0[1]) * q) * u)), ks = DPR * SCALE;
+        fx.push({ x: p.x / ks + CAM.x, y: p.y / ks + CAM.y, vx: rand(-14, 14), vy: -rand(30, top ? 90 : 60), t: 0, life: rand(.45, top ? 1 : .75), col: top && Math.random() < .35 ? '#ffffff' : 'rgb(' + col + ')', size: rand(1.2, top ? 3 : 2.2) }); }
+      return;
+    } }
+  drawWeaponGlowLines(g, k, walking, fi, f, u, tier, t);
+}
+function drawWeaponGlowLines(g, k, walking, fi, f, u, tier, t) {
   const W0 = WSEG[k] || WSEG[SKIN_BASE[k] || k]; if (!W0) return; const segs = (walking ? W0.w : W0.a)[fi] || []; if (!segs.length) return;
   const col = tier[1], top = tier[0] >= 10, mid = tier[0] >= 7, pulse = .7 + Math.sin(t * (top ? 8 : 5)) * .3;
   g.save(); g.globalCompositeOperation = 'lighter'; g.lineCap = 'round';
@@ -4456,7 +4494,7 @@ function drawSprite(g, k, x, y, s, t, o) {
   if (o.pick >= 0) { const c = Math.min(1, o.pick * 6); g.rotate(c * .16); g.scale(1 + c * .05, 1 - c * (.14 + Math.sin(t * 16) * .025)); }
   g.drawImage(img, f.sx, 0, f.w, f.h, f.ox * u, f.oy * u, f.w * u, f.h * u);
   const tier = o.enh ? enhTier(o.enh) : null;
-  if (tier) drawWeaponGlow(g, k, walking, M.f.indexOf(f), f, u, tier, t);
+  if (tier) drawWeaponGlow(g, k, walking, M.f.indexOf(f), f, u, tier, t, img);
   g.restore();
 }
 function drawHero(g, k, x, y, s, t, o = {}) {
@@ -5261,16 +5299,17 @@ function selDraw(dt) {
   const labels = [];
   for (const it of items) {
     if (it.fire) { drawFire(g, G); continue; }
-    const C = CLASSES[it.k], isSel = pickCls === it.k, hov = selHover === it.k, dim = pickCls && !isSel;
+    const C = CLASSES[it.k], lock = CLS_LOCK.has(it.k), isSel = pickCls === it.k, hov = !lock && selHover === it.k, dim = lock || (pickCls && !isSel);
     g.save();
     if (isSel || hov) { g.strokeStyle = isSel ? '#c4352a' : 'rgba(196,53,42,.6)'; g.lineWidth = 2; g.beginPath(); g.ellipse(it.x, it.y, 30 * it.s, 8 * it.s, 0, 0, TAU); g.stroke(); }
-    if (dim) g.filter = 'brightness(.35) saturate(.4)';
+    if (lock) g.filter = 'brightness(.3) grayscale(.85)';
+    else if (dim) g.filter = 'brightness(.35) saturate(.4)';
     else if (isSel) { g.shadowColor = 'rgba(200,40,25,.9)'; g.shadowBlur = 24; }
     else if (hov) { g.shadowColor = 'rgba(220,70,40,.7)'; g.shadowBlur = 16; g.filter = 'brightness(1.1)'; }
     else g.filter = 'brightness(.72) saturate(.75) sepia(.15)';
     drawHero(g, it.k, it.x, it.y, it.s, selT, { flip: !isSel && it.x > G.fx + 5, seed: it.i * 1.7, atk: selState[it.k].atk });
     g.restore();
-    labels.push({ t: C.name, x: it.x, y: it.y + 14 + 8 * it.s, fs: Math.round(clamp(13 * it.s, 12, 18)), col: dim ? 'rgba(170,150,135,.55)' : (isSel || hov ? '#ff6a55' : '#e2d3b8') });
+    labels.push({ t: lock ? C.name + ' · 미출시' : C.name, x: it.x, y: it.y + 14 + 8 * it.s, fs: Math.round(clamp(13 * it.s, 12, 18)), col: dim ? 'rgba(170,150,135,.55)' : (isSel || hov ? '#ff6a55' : '#e2d3b8') });
   }
   // 불티
   g.globalCompositeOperation = 'lighter';
@@ -5331,6 +5370,7 @@ function selHit(px, py) {
 const modal = $('#selModal');
 let modalTimer = 0, lastFocus = null;
 function choose(k) {
+  if (CLS_LOCK.has(k)) { const n = $('#clsNote'); if (n) n.textContent = `${CLASSES[k].name}는 아직 출시 전이에요. 씨프나 엔지니어로 시작해 주세요.`; return; }
   if (k) selState[k].atk = 0;
   pickCls = k; renderClassSel();
   if (k) openModal(); else closeModal();
@@ -5366,7 +5406,7 @@ function closeModal() {
   if (lastFocus && lastFocus.focus) lastFocus.focus({ preventScroll: true });
 }
 function renderClassSel() {
-  if ($('#clsChips')) $('#clsChips').innerHTML = CLS_ORDER.map(k => `<button class="chip${pickCls === k ? ' on' : ''}" data-k="${k}" style="--c:${CLASSES[k].col}">${CLASSES[k].name}</button>`).join('');
+  if ($('#clsChips')) $('#clsChips').innerHTML = CLS_ORDER.map(k => `<button class="chip${pickCls === k ? ' on' : ''}" data-k="${k}" style="--c:${CLASSES[k].col}${CLS_LOCK.has(k) ? ';opacity:.4;cursor:not-allowed' : ''}">${CLASSES[k].name}${CLS_LOCK.has(k) ? ' · 미출시' : ''}</button>`).join('');
   $('#selHint').hidden = !!pickCls;
 }
 function showClassSel(fromSave) {
@@ -5379,7 +5419,7 @@ function showClassSel(fromSave) {
 }
 function closeClassSel() { selRun = false; modal.classList.remove('open'); modal.hidden = true; $('#classSel').hidden = true; }
 function startPicked() { if (!pickCls) return; const k = pickCls; closeClassSel(); begin(pendingSave, k); }
-selCv.addEventListener('pointermove', e => { selHover = selHit(e.clientX, e.clientY); selCv.style.cursor = selHover ? 'pointer' : 'default'; });
+selCv.addEventListener('pointermove', e => { selHover = selHit(e.clientX, e.clientY); selCv.style.cursor = selHover ? (CLS_LOCK.has(selHover) ? 'not-allowed' : 'pointer') : 'default'; });
 selCv.addEventListener('pointerleave', () => { selHover = null; });
 selCv.addEventListener('click', e => { const k = selHit(e.clientX, e.clientY); if (k) choose(k); });
 $('#clsChips') && $('#clsChips').addEventListener('click', e => { const b = e.target.closest('.chip'); if (b) choose(b.dataset.k); });
@@ -5389,7 +5429,7 @@ addEventListener('keydown', e => {
   if ($('#classSel').hidden) return;
   if (e.code === 'ArrowRight' || e.code === 'ArrowLeft') {
     const i = pickCls ? CLS_ORDER.indexOf(pickCls) : -1, d = e.code === 'ArrowRight' ? 1 : -1;
-    choose(CLS_ORDER[(i + d + CLS_ORDER.length) % CLS_ORDER.length]); e.preventDefault();
+    { const open = CLS_ORDER.filter(k => !CLS_LOCK.has(k)), j = pickCls ? open.indexOf(pickCls) : -1; choose(open[(j + d + open.length) % open.length]); } e.preventDefault();
   } else if (e.code === 'Enter' && pickCls && !(e.target && e.target.closest && e.target.closest('[data-close]'))) { e.preventDefault(); startPicked(); }
   else if (e.code === 'Escape') { if (pickCls) closeModal(); else { closeClassSel(); $('#title').hidden = false; } }
 });
