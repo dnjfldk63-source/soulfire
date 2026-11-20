@@ -277,8 +277,10 @@ body.compact #bgmBox{right:calc(env(safe-area-inset-right,0px) + 146px);top:calc
 .dlg-next{margin-left:auto;font-size:13px;color:#ffcf8a;animation:nextBlink 1s ease-in-out infinite}
 @keyframes nextBlink{50%{opacity:.35}}
 @media (max-width:640px){#dlgImg{height:44vh;max-width:70vw;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 190px)}#dlg.play #dlgImg{animation:none}}
-#qTrack{left:calc(env(safe-area-inset-left,0px) + 16px);right:auto;top:calc(env(safe-area-inset-top,0px) + 192px);max-width:240px;padding:7px 10px;background:rgba(12,8,6,.78);border:1px solid #5a3a24;border-left:3px solid #ffb020;border-radius:6px;font-size:12px;line-height:1.45;color:#e8dcc8;pointer-events:none}
-#qTrack div+div{margin-top:5px;padding-top:5px;border-top:1px solid #3a2a20}#qTrack .qs b{color:#8fd8ff}#qTrack b{color:#ffd58a;font-family:var(--f-display)}#qTrack .qn{color:#ffcf6a;font-weight:700}#qTrack .qd{color:#7fffb0}
+#qTrack{left:calc(env(safe-area-inset-left,0px) + 16px);right:auto;top:calc(env(safe-area-inset-top,0px) + 192px);max-width:196px;padding:5px 22px 5px 8px;background:rgba(12,8,6,.42);border:1px solid rgba(90,58,36,.55);border-left:2px solid rgba(255,176,32,.8);border-radius:6px;font-size:11px;line-height:1.38;color:#e8dcc8;text-shadow:0 1px 2px #000;pointer-events:none}
+#qTog{position:absolute;right:2px;top:2px;width:18px;height:18px;padding:0;border:0;border-radius:4px;background:rgba(0,0,0,.35);color:#ffd58a;font-size:12px;line-height:18px;cursor:pointer;pointer-events:auto}
+#qTrack.fold{padding:3px 22px 3px 6px}#qTrack.fold #qBody{display:none}#qTrack.fold::before{content:'📜 퀘스트';font-size:11px;color:#ffd58a}
+#qTrack #qBody>div+div{margin-top:4px;padding-top:4px;border-top:1px solid rgba(58,42,32,.6)}#qTrack .qs b{color:#8fd8ff}#qTrack b{color:#ffd58a;font-family:var(--f-display)}#qTrack .qn{color:#ffcf6a;font-weight:700}#qTrack .qd{color:#7fffb0}
 body.compact #qTrack{max-width:180px;font-size:11px}
 #cpToast{z-index:60;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 104px);transform:translate(-50%,10px);opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;background:rgba(10,7,7,.82);border:1px solid #3a2a24;border-radius:20px;padding:6px 16px;font-family:var(--f-ui);font-size:13px;color:#e8dcc8;white-space:nowrap;font-variant-numeric:tabular-nums;box-shadow:0 6px 20px rgba(0,0,0,.6)}
 #cpToast.on{opacity:1;transform:translate(-50%,0)}
@@ -582,7 +584,7 @@ body.touch #recallBar{bottom:calc(env(safe-area-inset-bottom,0px) + 150px)}
 </div></div>
 <div id="cut" hidden><div class="cbar t"></div><div class="cbar b"></div><div class="cglow"></div><div class="cstreak"></div><img id="cutImg" alt=""><div class="ctext"><div class="ceb">RAID BOSS</div><div class="cname" id="cutName"></div></div><div class="cflash"></div><div class="cskip">탭하면 건너뛰기</div></div>
 <div id="dlg" hidden><div class="dlg-dim"></div><img id="dlgImg" alt=""><div class="dlg-box"><div class="dlg-name" id="dlgName"></div><div class="dlg-txt" id="dlgTxt"></div><div class="dlg-foot"><span id="dlgPage"></span><div class="dlg-acts" id="dlgActs"></div><div class="dlg-next" id="dlgNext">다음 ▶</div></div></div></div>
-<div class="hud" id="qTrack" hidden></div>
+<div class="hud" id="qTrack" hidden><button id="qTog" type="button" aria-label="퀘스트 창 접기">◂</button><div id="qBody"></div></div>
 <div class="hud top" id="bgmBox"><button id="sfxBtn" class="aBtn" title="효과음 켜기/끄기">🔔</button><button id="bgmBtn" title="배경음악 켜기/끄기">🔊</button><input id="bgmVol" type="range" min="0" max="1" step="0.05" aria-label="배경음악 음량"></div>
 <div id="zvBlur"></div>
 <div id="zvUi" hidden><div class="zv-bar"><button class="btn pri" id="zvX">원래대로</button></div></div>
@@ -2400,6 +2402,9 @@ function drawWeaponGlowLines(g, k, walking, fi, f, u, tier, t) {
 
 // ───────── 퀘스트 보상 팝업 ─────────
 let RW = null;
+{ let fold = false; try { fold = localStorage.getItem('sf-qfold') === '1'; } catch (e) { } const qt = $('#qTrack'), tg = $('#qTog'); const set = () => { qt.classList.toggle('fold', fold); tg.textContent = fold ? '▸' : '◂'; tg.setAttribute('aria-label', fold ? '퀘스트 창 펼치기' : '퀘스트 창 접기'); }; set();
+  for (const ev of ['pointerdown', 'touchstart', 'mousedown']) tg.addEventListener(ev, e => e.stopPropagation(), { passive: true });
+  tg.addEventListener('click', e => { e.stopPropagation(); fold = !fold; try { localStorage.setItem('sf-qfold', fold ? '1' : '0'); } catch (er) { } set(); }); }
 function showReward(o) {
   SFX.reward();
   // o: { kind:'main'|'sub', title, xp, gold, item, extra:[{img,name,n}] }
@@ -2828,6 +2833,8 @@ const SFX = (() => {
   function nz(t, dur, type, f0, f1, g0, q = 1) { const s = ac.createBufferSource(); s.buffer = noise; s.playbackRate.value = jit(1, .2); const f = ac.createBiquadFilter(); f.type = type; f.Q.value = q; f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(Math.max(40, f1), t + dur); const g = ac.createGain(); g.gain.setValueAtTime(g0, t); g.gain.exponentialRampToValueAtTime(.0005, t + dur); s.connect(f); f.connect(g); g.connect(out); s.start(t, Math.random() * .5); s.stop(t + dur + .02); }
   function tone(t, type, f0, f1, dur, g0, att = .003) { const o = ac.createOscillator(), g = ac.createGain(); o.type = type; o.frequency.setValueAtTime(f0, t); if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(g0, t + att); g.gain.exponentialRampToValueAtTime(.0005, t + dur); o.connect(g); g.connect(out); o.start(t); o.stop(t + dur + .02); }
   const T = () => ac.currentTime + .005;
+  function bra(t, f, dur, g0) { const o1 = ac.createOscillator(), o2 = ac.createOscillator(), lp = ac.createBiquadFilter(), g = ac.createGain(); o1.type = o2.type = 'sawtooth'; o1.frequency.value = f; o2.frequency.value = f * 1.004; lp.type = 'lowpass'; lp.Q.value = 1.4; lp.frequency.setValueAtTime(300, t); lp.frequency.linearRampToValueAtTime(2300, t + .12); lp.frequency.exponentialRampToValueAtTime(1000, t + dur); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(g0, t + .07); g.gain.setValueAtTime(g0 * .85, t + dur * .65); g.gain.exponentialRampToValueAtTime(.0005, t + dur); o1.connect(lp); o2.connect(lp); lp.connect(g); g.connect(out); o1.start(t); o2.start(t); o1.stop(t + dur + .05); o2.stop(t + dur + .05); }
+  function timp(t, f, dur = .8, g0 = .5) { const o = ac.createOscillator(), g = ac.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(f * 1.6, t); o.frequency.exponentialRampToValueAtTime(f, t + .06); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(g0, t + .005); g.gain.exponentialRampToValueAtTime(.0005, t + dur); o.connect(g); g.connect(out); o.start(t); o.stop(t + dur + .05); nz(t, .12, 'lowpass', 500, 120, g0 * .5); }
   const KIND = {
     blunt: (t, p, c) => { tone(t, 'sine', 95 * p, 42, .14, .34 * c); nz(t, .07, 'bandpass', 900 * p, 300, .28 * c, 1.4); nz(t, .03, 'lowpass', 2400, 700, .12 * c); },
     blade: (t, p, c) => { nz(t, .08, 'bandpass', 4200 * p, 1700, .2 * c, 2); nz(t + .012, .07, 'lowpass', 950, 200, .2 * c); tone(t, 'sine', 140 * p, 68, .08, .13 * c); },
@@ -2848,9 +2855,9 @@ const SFX = (() => {
     coin() { if (!ok('coin', 90)) return; const t = T(), p = jit(1, .05); tone(t, 'sine', 1560 * p, 1560 * p, .07, .07); tone(t + .05, 'sine', 2080 * p, 2080 * p, .1, .06); },
     pick() { if (!ok('pick', 120)) return; const t = T(); tone(t, 'triangle', 880, 880, .08, .08); tone(t + .06, 'triangle', 1320, 1320, .14, .07); },
     level() { if (!ok('level', 400)) return; const t = T(); [523, 659, 784, 1047].forEach((f, i) => tone(t + i * .09, 'triangle', f, f, .45, .13)); tone(t + .36, 'sine', 2093, 2093, .8, .05); BGM.duck(.8); },
-    quest() { if (!ok('quest', 600)) return; const t = T(); [[392, 0], [523, .14], [659, .28], [784, .42]].forEach(([f, d]) => { tone(t + d, 'sawtooth', f, f, .5, .05); tone(t + d, 'triangle', f, f, .55, .1); }); tone(t + .42, 'triangle', 1047, 1047, 1.2, .08); nz(t + .42, .9, 'highpass', 6000, 3000, .05); BGM.duck(1.2); },
-    reward() { if (!ok('reward', 400)) return; const t = T(); [784, 988, 1175, 1568].forEach((f, i) => { tone(t + i * .07, 'sine', f, f, .7, .07); tone(t + i * .07, 'triangle', f * 2, f * 2, .4, .02); }); },
-    clang() { if (!ok('clang', 80)) return; const t = T(), p = jit(1, .05); [1, 2.76, 5.4].forEach((m, i) => tone(t, 'sine', 620 * m * p, 620 * m * p, .5 - i * .12, .16 / (i + 1))); nz(t, .06, 'highpass', 4000, 2000, .25); },
+    quest() { if (!ok('quest', 600)) return; const t = T(); timp(t, 73, .5, .4); timp(t + .17, 73, .5, .45); timp(t + .34, 55, 1.6, .6); [146.8, 220, 293.7, 370].forEach(f => bra(t + .34, f, 1.9, .085)); bra(t + .34, 73.4, 1.9, .07); nz(t + .34, 1.7, 'highpass', 6000, 3500, .07); BGM.duck(2.2); },
+    reward() { if (!ok('reward', 400)) return; const t = T(); for (let i = 0; i < 7; i++) timp(t + i * .085, 62, .35, .2 + i * .05); [[293.7, 0], [370, .22], [440, .44]].forEach(([f, d]) => { bra(t + .6 + d, f, .5, .1); bra(t + .6 + d, f / 2, .5, .06); }); const ch = [146.8, 220, 293.7, 370, 440, 587.3]; ch.forEach(f => bra(t + 1.3, f, 2.6, .07)); bra(t + 1.3, 73.4, 2.6, .09); timp(t + 1.3, 55, 2, .7); nz(t + 1.3, 2.4, 'highpass', 5000, 2800, .13); ch.forEach(f => tone(t + 1.3, 'triangle', f * 2, f * 2, 2.8, .022, .7)); BGM.duck(4); },
+    clang() { if (!ok('clang', 80)) return; const t = T(), p = jit(1, .03); [[1, .42, 1.7], [2.76, .28, 1.3], [5.4, .16, .9], [8.93, .09, .55], [13.3, .045, .35]].forEach(([m, g0, d]) => tone(t, 'sine', 400 * m * p, 400 * m * p * .997, d, g0, .001)); tone(t, 'triangle', 200 * p, 197 * p, 1, .2, .001); nz(t, .05, 'highpass', 5200, 2600, .45); nz(t, .14, 'bandpass', 2200, 1100, .32, 3); tone(t, 'sine', 115, 55, .18, .5); BGM.duck(.7); },
     success() { if (!ok('succ', 300)) return; const t = T(); [659, 784, 988, 1319].forEach((f, i) => tone(t + i * .06, 'triangle', f, f, .6, .12)); nz(t, .7, 'highpass', 7000, 4000, .06); BGM.duck(.8); },
     fail() { if (!ok('fail', 300)) return; const t = T(); tone(t, 'sawtooth', 160, 70, .6, .12); tone(t, 'sawtooth', 169, 74, .6, .1); nz(t, .4, 'lowpass', 600, 120, .2); },
     bite() { if (!ok('bite', 200)) return; const t = T(); nz(t, .25, 'bandpass', 1800, 600, .25, .8); tone(t, 'sine', 900, 1400, .1, .08); },
@@ -4674,7 +4681,7 @@ function updHud() {
   $('#gold').textContent = `${fmt(P.gold)} 골드`; { const cp = combatPower(); if (cp !== P._cpShown) { if (P._cpShown != null && started) cpToast(P._cpShown, cp); P._cpShown = cp; $('#cp').innerHTML = `전투력 <b>${fmt(cp)}</b>`; } }
   $('#pts').textContent = P.pts ? `능력치 포인트 ${P.pts}` : '';
   $('#pot-n').textContent = P.pots; { const si = $('#swarmInfo'); if (RAID) { const R = RAIDS[RAID.k], t = RAID.done ? RAID.tm : GT - RAID.t0, f = v => Math.floor(v / 60) + ':' + String(Math.floor(v % 60)).padStart(2, '0'); si.style.opacity = 1; si.textContent = RAID.done ? `레이드 클리어 ${f(t)} · 나가는 문으로` : RAID.mult > 1 ? `${R.name} ${f(t)} · 광폭화 ×${RAID.mult}` : `${R.name} ${f(t)} · 광폭화까지 ${f(R.enr - t)}`; si.style.color = RAID.mult > 1 ? '#ff4a2a' : '#ffb48a'; } else { si.style.opacity = swarmOn ? 1 : 0; si.style.color = ''; if (swarmOn) si.textContent = `무리 습격 · 남은 적 ${swarmOn.left}`; } }
-  { const qt = $('#qTrack'); const h = RAID ? '' : questHud(); if (h) { if (qt.innerHTML !== h) qt.innerHTML = h; qt.hidden = false; } else qt.hidden = true; }
+  { const qt = $('#qTrack'), qb = $('#qBody'); const h = RAID ? '' : questHud(); if (h) { if (qb.innerHTML !== h) qb.innerHTML = h; qt.hidden = false; } else qt.hidden = true; }
   { const ce = $('#combo'); if (P.combo >= 5) { ce.style.opacity = 1; ce.querySelector('b').textContent = P.combo; ce.querySelector('small').textContent = P.frenzy > 0 ? '광폭화 ' + Math.ceil(P.frenzy) + '초' : P.combo < 50 ? '연속 처치 · 50 광폭화' : '연속 처치 · 100마다 천벌'; ce.querySelector('i').style.transform = 'scaleX(' + Math.max(0, P.comboT / 3) + ')'; ce.classList.toggle('fr', P.frenzy > 0); } else ce.style.opacity = 0; }
   { const bb = $('#bossbar'), sb = $('#stat').getBoundingClientRect().bottom, bbb = !bb.hidden ? bb.getBoundingClientRect().bottom : 0; $('#qTrack').style.top = Math.round(Math.max(sb, bbb) + 8) + 'px'; }
   { const ids = Object.keys(P.sk || {}), tray = $('#skTray'), key = ids.map(i => i + P.sk[i]).join(',');
