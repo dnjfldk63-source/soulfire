@@ -704,7 +704,7 @@ const TOUCH = matchMedia('(pointer:coarse)').matches;
 if (TOUCH) document.body.classList.add('touch');
 let W = 0, H = 0, DPR = 1, SCALE = 1, MINI = 150;
 function resize() {
-  DPR = Math.min(2, window.devicePixelRatio || 1);
+  DPR = Math.min(1.5, window.devicePixelRatio || 1);
   W = innerWidth; H = innerHeight;
   cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
   SCALE = Math.min(W, H) < 560 ? 0.8 : 1;
@@ -713,7 +713,13 @@ function resize() {
 }
 const COMPACT = () => document.body.classList.contains('compact');
 function setCompact() { document.body.classList.toggle('compact', TOUCH || innerWidth < 760); }
-addEventListener('resize', () => { resize(); setCompact(); }); resize(); setCompact();
+addEventListener('resize', () => { resize(); setCompact(); HUD_GEO = 1; }); resize(); setCompact();
+// 전체 화면 오버레이(비네트·저체력 테두리·열기)는 1/4 해상도로 한 번만 그려 두고 매 프레임 확대해 붙임
+const FSC = {};
+function fsCanvas(name, paint) { let e = FSC[name]; const key = W + 'x' + H; if (e && e.k === key) return e.c; if (!e) e = FSC[name] = { c: document.createElement('canvas'), k: '' }; e.k = key; const q = .25, c = e.c; c.width = Math.max(1, Math.ceil(W * q)); c.height = Math.max(1, Math.ceil(H * q)); const g = c.getContext('2d'); g.setTransform(q, 0, 0, q, 0, 0); g.clearRect(0, 0, W, H); paint(g); return c; }
+// 안개·등불처럼 움직이는 원형 빛은 256px 스프라이트 하나를 확대해 그림 (매 프레임 createRadialGradient 대신)
+const FOGB = {};
+function fogBlob(fc, a) { const id = fc + '|' + a; let c = FOGB[id]; if (c) return c; c = FOGB[id] = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d'), gr = g.createRadialGradient(128, 128, 0, 128, 128, 128); gr.addColorStop(0, `rgba(${fc},${a})`); gr.addColorStop(1, `rgba(${fc},0)`); g.fillStyle = gr; g.fillRect(0, 0, 256, 256); return c; }
 
 // ───────── 유틸 ─────────
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -946,6 +952,11 @@ Object.assign(MOB_IMG_DATA, {"blindmonk":"data:image/webp;base64,UklGRmQpAABXRUJ
 const MOB_IMG = {}, MOB_WHITE = {};
 for (const k of Object.keys(MOB_IMG_DATA)) { const im = new Image(); im.onload = () => { MOB_IMG[k] = im; const c = document.createElement('canvas'); c.width = im.width; c.height = im.height; const x = c.getContext('2d'); x.drawImage(im, 0, 0); x.globalCompositeOperation = 'source-in'; x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); MOB_WHITE[k] = c; }; im.src = MOB_IMG_DATA[k]; }
 const MOB_ICE = {};
+// 성능: 캔버스 filter·shadowBlur는 매 프레임 쓰면 소프트웨어 패스가 돌아 느리므로, 한 번 만들어 둔 캔버스를 재사용
+const FIMG = new Map();
+function filtImg(im, key, filt) { if (!im || !im.width) return im; const id = key + '|' + filt; let c = FIMG.get(id); if (c) return c; c = document.createElement('canvas'); c.width = im.width; c.height = im.height; const x = c.getContext('2d'); x.filter = filt; x.drawImage(im, 0, 0); x.filter = 'none'; FIMG.set(id, c); return c; }
+const MOB_SIL = {};
+function silTint(k, col) { const id = k + '|' + col; if (MOB_SIL[id]) return MOB_SIL[id]; const w = MOB_WHITE[k]; if (!w) return null; const c = document.createElement('canvas'); c.width = w.width; c.height = w.height; const x = c.getContext('2d'); x.drawImage(w, 0, 0); x.globalCompositeOperation = 'source-in'; x.fillStyle = col; x.fillRect(0, 0, c.width, c.height); return (MOB_SIL[id] = c); }
 function iceSil(k) { if (MOB_ICE[k]) return MOB_ICE[k]; const w = MOB_WHITE[k]; if (!w) return null; const c = document.createElement('canvas'); c.width = w.width; c.height = w.height; const x = c.getContext('2d'); x.drawImage(w, 0, 0); x.globalCompositeOperation = 'source-in'; x.fillStyle = '#7fd4ff'; x.fillRect(0, 0, c.width, c.height); return (MOB_ICE[k] = c); }
 const MOB_ART = {
   slime: ['slime', 40], bat: ['bat', 40], wolf: ['wolf', 48], shroom: ['shroom', 56], skel: ['skel', 60], golem: ['golem', 76],
@@ -1621,9 +1632,8 @@ function drawHazards() {
       if (im && h.t < .5) { const hh = art[1], ww = im.width * hh / im.height, fall = (h.t / .5) * 420; ctx.save(); if (e.d.filt) ctx.filter = e.d.filt; ctx.drawImage(im, h.x - ww / 2, h.y - hh - fall, ww, hh); ctx.restore(); }
     } else if (h.t < .55) {
       const fall = h.t / .55, fxp = h.x + 140 * fall, fyp = h.y - 420 * fall;
-      const icy = h.mcol === '#9fe8ff'; if (icy) { ctx.save(); ctx.filter = 'hue-rotate(185deg) saturate(1.3)'; }
-      if (!fxDraw('fireball', fxp, fyp, h.r * 1.5, Math.atan2(420, -140) + FB_ROT, 1)) circ(fxp, fyp, 12, h.mcol || '#ff7a2a');
-      if (icy) ctx.restore();
+      const icy = h.mcol === '#9fe8ff'; if (icy && FXI.fireball && !FXI.fireball_ice) FXI.fireball_ice = filtImg(FXI.fireball, 'fireball', 'hue-rotate(185deg) saturate(1.3)');
+      if (!fxDraw(icy && FXI.fireball_ice ? 'fireball_ice' : 'fireball', fxp, fyp, h.r * 1.5, Math.atan2(420, -140) + FB_ROT, 1)) circ(fxp, fyp, 12, h.mcol || '#ff7a2a');
     }
   }
 }
@@ -2276,18 +2286,19 @@ const CORPSES = [];
 function addCorpse(e) {
   const art = MOB_ART[e.type], im = art && MOB_IMG[art[0]]; if (!im || e.air) return;
   const hh = art[1] * (e.elite ? 1.25 : 1), ww = im.width * hh / im.height;
-  CORPSES.push({ im, wh: MOB_WHITE[art[0]], x: e.x, y: e.y + e.r * .8 - (e.d.fly ? 16 : 0), ww, hh, flip: Math.cos(e.face) < 0 ? -1 : 1, t0: GT, life: e.boss ? 1.4 : .6, boss: e.boss, col: e.d.col });
+  CORPSES.push({ im, wh: MOB_WHITE[art[0]], wk: art[0], x: e.x, y: e.y + e.r * .8 - (e.d.fly ? 16 : 0), ww, hh, flip: Math.cos(e.face) < 0 ? -1 : 1, t0: GT, life: e.boss ? 1.4 : .6, boss: e.boss, col: e.d.col });
   if (CORPSES.length > 40) CORPSES.shift();
 }
 function drawCorpse(c) {
   const k = (GT - c.t0) / c.life; if (k >= 1) return;
   ctx.save(); ctx.translate(c.x, c.y); ctx.scale(c.flip, 1);
   ctx.rotate(-Math.min(1, k * 1.6) * (c.boss ? .35 : .9)); ctx.scale(1 + k * .15, 1 - k * .35);
-  ctx.globalAlpha = Math.max(0, 1 - k * k * 1.1); ctx.filter = 'brightness(' + (1 - k * .6) + ') saturate(' + (1 - k * .7) + ')';
-  ctx.drawImage(c.im, -c.ww / 2, -c.hh, c.ww, c.hh); ctx.filter = 'none';
+  const ca = Math.max(0, 1 - k * k * 1.1); ctx.globalAlpha = ca;
+  ctx.drawImage(c.im, -c.ww / 2, -c.hh, c.ww, c.hh);
+  { const dk = c.wk ? silTint(c.wk, '#140c0a') : null; if (dk) { ctx.globalAlpha = ca * Math.min(.7, k * .75); ctx.drawImage(dk, -c.ww / 2, -c.hh, c.ww, c.hh); } }
   if (c.wh && k < .3) { ctx.globalAlpha = (1 - k / .3) * .7; ctx.drawImage(c.wh, -c.ww / 2, -c.hh, c.ww, c.hh); }
   ctx.restore();
-  if (Math.random() < (c.boss ? 1 : .55)) { const ember = Math.random() < .35; fx.push({ x: c.x + rand(-c.ww * .3, c.ww * .3), y: c.y - rand(0, c.hh * .7), vx: rand(-14, 14), vy: -rand(30, 80), t: 0, life: rand(.5, 1), col: ember ? '#ff8a3a' : 'rgba(60,54,52,.9)', size: ember ? rand(1.2, 2.2) : rand(2, 3.6) }); }
+  if (Math.random() < (c.boss ? .6 : .25)) { const ember = Math.random() < .35; fx.push({ x: c.x + rand(-c.ww * .3, c.ww * .3), y: c.y - rand(0, c.hh * .7), vx: rand(-14, 14), vy: -rand(30, 80), t: 0, life: rand(.5, 1), col: ember ? '#ff8a3a' : 'rgba(60,54,52,.9)', size: ember ? rand(1.2, 2.2) : rand(2, 3.6) }); }
 }
 // 발걸음 먼지
 function stepDust(x, y) {
@@ -2316,17 +2327,17 @@ function drawAtmos() {
   // 안개 (숲·묘역·호수)
   if (z === 2 || z === 5 || z === 8 || z === 1) { const fogA = z === 1 ? .05 : .11, fc = z === 5 ? '120,100,150' : z === 8 ? '200,225,255' : '170,190,175';
     ctx.save(); ctx.globalCompositeOperation = 'screen'; for (let k = 0; k < 5; k++) { const px = ((k * 397 + GT * (12 + k * 5) - CAM.x * SCALE * .35) % (W + 600) + W + 600) % (W + 600) - 300, py = H * (.15 + k * .19) + Math.sin(GT * .3 + k) * 30 - (CAM.y * SCALE * .1) % 60, r = Math.max(W, H) * (.28 + (k % 2) * .12);
-      const g = ctx.createRadialGradient(px, py, 0, px, py, r); g.addColorStop(0, `rgba(${fc},${fogA})`); g.addColorStop(1, `rgba(${fc},0)`); ctx.fillStyle = g; ctx.fillRect(px - r, py - r, r * 2, r * 2); } ctx.restore(); }
+      ctx.drawImage(fogBlob(fc, fogA), px - r, py - r, r * 2, r * 2); } ctx.restore(); }
   // 협곡 열기 일렁임
-  if (z === 4) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; const g = ctx.createLinearGradient(0, H, 0, H * .55); g.addColorStop(0, `rgba(255,80,20,${.12 + Math.sin(GT * 2) * .03})`); g.addColorStop(1, 'rgba(255,80,20,0)'); ctx.fillStyle = g; ctx.fillRect(0, H * .55, W, H * .45); ctx.restore(); }
+  if (z === 4) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = (.12 + Math.sin(GT * 2) * .03) / .15; ctx.drawImage(fsCanvas('heat', g => { const gr = g.createLinearGradient(0, H, 0, H * .55); gr.addColorStop(0, 'rgba(255,80,20,.15)'); gr.addColorStop(1, 'rgba(255,80,20,0)'); g.fillStyle = gr; g.fillRect(0, H * .55, W, H * .45); }), 0, 0, W, H); ctx.restore(); }
   // 플레이어 주변 온기 (등불)
   if (started && !P.dead) { const sx = (P.x - CAM.x) * SCALE, sy = (P.y - 20 - CAM.y) * SCALE, R = 170 * SCALE * (1 + Math.sin(GT * 7) * .02 + Math.sin(GT * 13) * .015);
-    ctx.save(); ctx.globalCompositeOperation = 'lighter'; const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, R); g.addColorStop(0, z === 7 || z === 8 || z === 9 ? 'rgba(160,200,255,.10)' : 'rgba(255,170,90,.11)'); g.addColorStop(1, 'rgba(255,140,60,0)'); ctx.fillStyle = g; ctx.fillRect(sx - R, sy - R, R * 2, R * 2); ctx.restore(); }
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.drawImage(z === 7 || z === 8 || z === 9 ? fogBlob('160,200,255', .10) : fogBlob('255,170,90', .11), sx - R, sy - R, R * 2, R * 2); ctx.restore(); }
 }
 // 채집 동작
 function drawGatherFx() {
   const G0 = P.gather; if (!G0) return; const x = tc(G0.tx), y = tc(G0.ty), k = Math.min(1, G0.t / G0.dur);
-  ctx.save(); ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.beginPath(); ctx.arc(x, y - 44, 13, 0, TAU); ctx.stroke(); ctx.strokeStyle = G0.col; ctx.shadowColor = G0.col; ctx.shadowBlur = 10; ctx.beginPath(); ctx.arc(x, y - 44, 13, -Math.PI / 2, -Math.PI / 2 + TAU * k); ctx.stroke(); ctx.restore();
+  ctx.save(); ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.beginPath(); ctx.arc(x, y - 44, 13, 0, TAU); ctx.stroke(); ctx.strokeStyle = G0.col; ctx.beginPath(); ctx.arc(x, y - 44, 13, -Math.PI / 2, -Math.PI / 2 + TAU * k); ctx.stroke(); ctx.restore();
   if (Math.random() < .7) { const a = rand(0, TAU); fx.push({ x: x + Math.cos(a) * 18, y: y - 8 + Math.sin(a) * 8, vx: (P.x - x) * 1.6, vy: (P.y - 30 - y) * 1.6 - 20, t: 0, life: .45, col: G0.col, size: rand(1.5, 2.8) }); }
 }
 
@@ -2451,6 +2462,9 @@ function weaponMask(key, img, f, segs) {
   WMASK.set(key, c); return c;
 }
 const WTINT = new Map();
+// 강화 글로우의 blur: 매 프레임 g.filter로 흐리게 하던 것을 마스크 단위로 한 번만 흐려서 캐시
+const WBLUR = new Map();
+function blurMask(key, tm, bl) { const id = key + '|' + bl.toFixed(1); let c = WBLUR.get(id); if (c) return c; const pad = Math.ceil(bl * 3); c = document.createElement('canvas'); c.width = tm.width + pad * 2; c.height = tm.height + pad * 2; const x = c.getContext('2d'); x.filter = 'blur(' + bl.toFixed(1) + 'px)'; x.drawImage(tm, pad, pad); x.filter = 'none'; c._pad = pad; WBLUR.set(id, c); return c; }
 function tintMask(key, m, col) { const k = key + '|' + col; let c = WTINT.get(k); if (c) return c; c = document.createElement('canvas'); c.width = m.width; c.height = m.height; const x = c.getContext('2d'); x.drawImage(m, 0, 0); x.globalCompositeOperation = 'source-in'; x.fillStyle = 'rgb(' + col + ')'; x.fillRect(0, 0, c.width, c.height); WTINT.set(k, c); return c; }
 function drawWeaponGlow(g, k, walking, fi, f, u, tier, t, img) {
   { const W0 = WSEG[k] || WSEG[SKIN_BASE[k] || k], segs = W0 && (walking ? W0.w : W0.a)[fi];
@@ -2459,10 +2473,10 @@ function drawWeaponGlow(g, k, walking, fi, f, u, tier, t, img) {
       const col = tier[1], top = tier[0] >= 10, mid = tier[0] >= 7, pulse = .7 + Math.sin(t * (top ? 8 : 5)) * .3, tm = tintMask(k + (walking ? 'w' : 'a') + fi, mk, col);
       const X = f.ox * u, Y = f.oy * u, Wd = f.w * u, Hd = f.h * u;
       g.save(); g.globalCompositeOperation = 'lighter';
-      for (const [bl, a] of top ? [[5, .7], [2.5, .8], [0, .75]] : mid ? [[3.5, .55], [1.5, .6], [0, .55]] : [[2.5, .4], [0, .45]]) { g.globalAlpha = a * pulse; g.filter = bl ? 'blur(' + (bl * u * 1.4).toFixed(1) + 'px)' : 'none'; g.drawImage(tm, X, Y, Wd, Hd); }
+      for (const [bl, a] of top ? [[5, .7], [2.5, .8], [0, .75]] : mid ? [[3.5, .55], [1.5, .6], [0, .55]] : [[2.5, .4], [0, .45]]) { g.globalAlpha = a * pulse; if (bl) { const bc = blurMask(k + (walking ? 'w' : 'a') + fi + '|' + col, tm, bl * 1.4), pd = bc._pad * u; g.drawImage(bc, X - pd, Y - pd, Wd + pd * 2, Hd + pd * 2); } else g.drawImage(tm, X, Y, Wd, Hd); }
       g.filter = 'none'; g.globalAlpha = (top ? .55 : mid ? .35 : .2) * pulse; g.drawImage(mk, X, Y, Wd, Hd);
       g.restore();
-      if (g === ctx && mid && Math.random() < (top ? .5 : .18)) { const s0 = segs[Math.floor(Math.random() * segs.length)], q = .6 + Math.random() * .4, m = g.getTransform(), p = m.transformPoint(new DOMPoint((f.ox + s0[0] + (s0[2] - s0[0]) * q) * u, (f.oy + s0[1] + (s0[3] - s0[1]) * q) * u)), ks = DPR * SCALE;
+      if (g === ctx && mid && Math.random() < (top ? .25 : .09)) { const s0 = segs[Math.floor(Math.random() * segs.length)], q = .6 + Math.random() * .4, m = g.getTransform(), p = m.transformPoint(new DOMPoint((f.ox + s0[0] + (s0[2] - s0[0]) * q) * u, (f.oy + s0[1] + (s0[3] - s0[1]) * q) * u)), ks = DPR * SCALE;
         fx.push({ x: p.x / ks + CAM.x, y: p.y / ks + CAM.y, vx: rand(-14, 14), vy: -rand(30, top ? 90 : 60), t: 0, life: rand(.45, top ? 1 : .75), col: top && Math.random() < .35 ? '#ffffff' : 'rgb(' + col + ')', size: rand(1.2, top ? 3 : 2.2) }); }
       return;
     } }
@@ -2482,7 +2496,7 @@ function drawWeaponGlowLines(g, k, walking, fi, f, u, tier, t) {
     rg.addColorStop(0, `rgba(255,255,255,${top ? .9 : .6})`); rg.addColorStop(.4, `rgba(${col},${top ? .6 : .4})`); rg.addColorStop(1, `rgba(${col},0)`); g.fillStyle = rg; g.beginPath(); g.arc(sx, sy, w * (top ? 5 : 3.5), 0, TAU); g.fill();
     if (top) { const tg = g.createRadialGradient(bx, by, 0, bx, by, w * 7); tg.addColorStop(0, `rgba(255,220,250,${.8 * pulse})`); tg.addColorStop(1, `rgba(${col},0)`); g.fillStyle = tg; g.beginPath(); g.arc(bx, by, w * 7, 0, TAU); g.fill(); }
     // 무기에서 피어나는 입자 (월드 좌표로 변환)
-    if (g === ctx && mid && Math.random() < (top ? .55 : .2)) { const q = Math.random(), m = g.getTransform(), p = m.transformPoint(new DOMPoint(ax + (bx - ax) * q, ay + (by - ay) * q)), ks = DPR * SCALE;
+    if (g === ctx && mid && Math.random() < (top ? .28 : .1)) { const q = Math.random(), m = g.getTransform(), p = m.transformPoint(new DOMPoint(ax + (bx - ax) * q, ay + (by - ay) * q)), ks = DPR * SCALE;
       fx.push({ x: p.x / ks + CAM.x, y: p.y / ks + CAM.y, vx: rand(-14, 14), vy: -rand(30, top ? 90 : 60), t: 0, life: rand(.45, top ? 1 : .75), col: top && Math.random() < .35 ? '#ffffff' : 'rgb(' + col + ')', size: rand(1.2, top ? 3 : 2.2) }); }
   }
   g.restore();
@@ -2837,13 +2851,13 @@ function engDraw() {
   if (P.flameT > 0 && !P.dead) { const a = P.flameA, R = P.flameR * 1.2, blue = P.flameAw, k = Math.min(1, (P.flameDur - P.flameT) / .14, P.flameT / .18), fr = Math.floor(GT * 16) % 3, im = ENG_IMG['jet' + fr], im2 = ENG_IMG['jet' + ((fr + 1) % 3)];
     const nx = P.x + Math.cos(a) * 20, ny = P.y - 22 + Math.sin(a) * 20;
     { const H0 = P.flameHist = P.flameHist || []; if (!H0.length || GT - H0[H0.length - 1].t > .004) H0.push({ t: GT, x: nx, y: ny, a }); while (H0.length && GT - H0[0].t > .45) H0.shift(); }
-    ctx.save(); ctx.translate(nx, ny); ctx.rotate(a); if (Math.cos(a) < 0) ctx.scale(1, -1); ctx.globalCompositeOperation = 'lighter'; const ice = P.flameIce; if (ice) ctx.filter = 'hue-rotate(185deg) saturate(.55) brightness(1.7)'; else if (blue) ctx.filter = 'hue-rotate(190deg) saturate(1.5) brightness(1.15)';
+    ctx.save(); ctx.translate(nx, ny); ctx.rotate(a); if (Math.cos(a) < 0) ctx.scale(1, -1); ctx.globalCompositeOperation = 'lighter'; const ice = P.flameIce, FJ = ice ? 'hue-rotate(185deg) saturate(.55) brightness(1.7)' : blue ? 'hue-rotate(190deg) saturate(1.5) brightness(1.15)' : null;
     if (im) { const L = R * (.35 + .65 * k), H = L * im.height / im.width, N = 12, flip = Math.cos(a) < 0 ? -1 : 1, Hs = P.flameHist || [];
       const past = lag => { const tt = GT - lag; for (let q = Hs.length - 1; q >= 0; q--) if (Hs[q].t <= tt) return Hs[q]; return Hs[0] || { x: nx, y: ny, a }; };
       const ca = Math.cos(-a), sa = Math.sin(-a), loc = (wx, wy) => { const dx = wx - nx, dy = wy - ny; return [dx * ca - dy * sa, (dx * sa + dy * ca) * flip]; };
       const pts = []; for (let q = 0; q <= N; q++) { const f = q / N, d = -4 + L * f, h = past(f * .22), wx = h.x + Math.cos(h.a) * d, wy = h.y + Math.sin(h.a) * d; pts.push(loc(wx, wy)); }
       const strip = (img, alpha, hs, yo) => { ctx.globalAlpha = alpha; for (let q = 0; q < N; q++) { const [x0, y0] = pts[q], [x1, y1] = pts[q + 1], seg = Math.hypot(x1 - x0, y1 - y0) + 1.5, ang = Math.atan2(y1 - y0, x1 - x0), sw = img.width / N; ctx.save(); ctx.translate(x0, y0); ctx.rotate(ang); ctx.drawImage(img, q * sw, 0, sw + 1, img.height, 0, -H * hs / 2 + yo, seg, H * hs); ctx.restore(); } };
-      strip(im, .95, 1, 0); if (im2) strip(im2, .45, 1.24, 0); }
+      strip(FJ ? filtImg(im, 'jet' + fr, FJ) : im, .95, 1, 0); if (im2) strip(FJ ? filtImg(im2, 'jet' + ((fr + 1) % 3), FJ) : im2, .45, 1.24, 0); }
     ctx.filter = 'none'; ctx.globalAlpha = 1; const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 34); g.addColorStop(0, ice ? 'rgba(255,255,255,.95)' : blue ? 'rgba(210,245,255,.95)' : 'rgba(255,245,190,.95)'); g.addColorStop(.4, ice ? 'rgba(170,230,255,.55)' : blue ? 'rgba(80,180,255,.5)' : 'rgba(255,150,40,.5)'); g.addColorStop(1, 'rgba(255,100,20,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, 34, 0, TAU); ctx.fill();
     ctx.restore();
     ctx.save(); ctx.globalCompositeOperation = 'lighter'; const gx = P.x + Math.cos(a) * R * .5, gy = P.y + Math.sin(a) * R * .5, lg = ctx.createRadialGradient(gx, gy, 0, gx, gy, R * .7); lg.addColorStop(0, blue ? 'rgba(90,170,255,.22)' : 'rgba(255,120,30,.22)'); lg.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = lg; ctx.fillRect(gx - R, gy - R, R * 2, R * 2); ctx.restore(); }
@@ -3147,10 +3161,10 @@ function genCrypt() {
 let CR_DK = null, CR_EYES = [], crAmbT = 8, CRA = null, ENDING = false;
 function drawCryptDark(vw, vh) {
   const m = ctx.getTransform(), sc = DPR * SCALE, toS = (x, y) => { const p = m.transformPoint(new DOMPoint(x, y)); return [p.x / sc, p.y / sc]; };
-  const zr = Math.hypot(m.a, m.b) / sc, W = Math.ceil(vw), H = Math.ceil(vh);
+  const zr = Math.hypot(m.a, m.b) / sc, W = Math.ceil(vw), H = Math.ceil(vh), DQ = .5, DW = Math.ceil(W * DQ), DH = Math.ceil(H * DQ);
   if (!CR_DK) CR_DK = document.createElement('canvas');
-  if (CR_DK.width !== W || CR_DK.height !== H) { CR_DK.width = W; CR_DK.height = H; }
-  const g = CR_DK.getContext('2d'); g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, W, H);
+  if (CR_DK.width !== DW || CR_DK.height !== DH) { CR_DK.width = DW; CR_DK.height = DH; }
+  const g = CR_DK.getContext('2d'); g.setTransform(DQ, 0, 0, DQ, 0, 0); g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, W, H);
   const deep = zoneAt(P.x, P.y) === 12; g.fillStyle = deep ? 'rgba(5,1,3,.93)' : 'rgba(2,4,9,.89)'; g.fillRect(0, 0, W, H);
   g.globalCompositeOperation = 'destination-out';
   const hole = (x, y, r, a) => { const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, `rgba(0,0,0,${a})`); gr.addColorStop(.5, `rgba(0,0,0,${a * .7})`); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill(); };
@@ -3169,7 +3183,7 @@ function drawCryptDark(vw, vh) {
   for (let k = CR_EYES.length - 1; k >= 0; k--) {
     const e = CR_EYES[k]; e.t += 1 / 60; if (e.t > e.life) { CR_EYES.splice(k, 1); continue; }
     const blink = (e.t % 1.7) < .12 ? .08 : 1, a = Math.min(1, e.t * 1.5, (e.life - e.t) * 2) * blink, d = 7 * e.s;
-    ctx.globalAlpha = a * .85; ctx.shadowColor = '#ff2a10'; ctx.shadowBlur = 12; ctx.fillStyle = '#ff3a1a';
+    ctx.globalAlpha = a * .3; circ(e.x, e.y, 9 * e.s, '#ff2a10'); ctx.globalAlpha = a * .85; ctx.fillStyle = '#ff3a1a';
     ctx.beginPath(); ctx.ellipse(e.x - d, e.y, 2.6 * e.s, 1.5 * e.s, -.15, 0, TAU); ctx.ellipse(e.x + d, e.y, 2.6 * e.s, 1.5 * e.s, .15, 0, TAU); ctx.fill();
   }
   ctx.restore();
@@ -3609,7 +3623,7 @@ function thfDraw() {
   if (P.stealthT > 0 && !P.dead) { ctx.save(); const g = ctx.createRadialGradient(P.x, P.y, 0, P.x, P.y, 40); g.addColorStop(0, P.stealthAw ? 'rgba(140,10,20,.45)' : 'rgba(20,10,30,.45)'); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(P.x, P.y + 10, 40, 14, 0, 0, TAU); ctx.fill(); ctx.restore(); }
   for (const o of THFO) {
     if (o.k === 'smoke') { const k = Math.min(1, o.t / .25), f = Math.min(1, (o.life - o.t) / .8); ctx.save(); for (const p of o.puffs) { const a = p.a + o.t * p.sp, x = o.x + Math.cos(a) * p.d * o.r, y = o.y + Math.sin(a) * p.d * o.r * .6 - 10, R = o.r * p.s * k; const g = ctx.createRadialGradient(x, y, 0, x, y, R); g.addColorStop(0, o.aw ? `rgba(120,150,90,${.42 * f})` : `rgba(150,145,140,${.42 * f})`); g.addColorStop(1, 'rgba(120,120,120,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, R, 0, TAU); ctx.fill(); } ctx.restore(); }
-    else if (o.k === 'clone') { const f = Math.min(1, o.t / .2, (o.life - o.t) / .3); ctx.save(); ctx.globalAlpha = .62 * f; ctx.filter = 'grayscale(1) brightness(.22) contrast(1.6)'; drawHero(ctx, (curSkin() && SPR[P.skin]) ? P.skin : 'chae', o.x, o.y + 12, (SPR.chae ? .64 : .52) * CLS().scale * 1.08, GT, { flip: Math.cos(o.face) < 0, walk: o.walk, moving: !!o.mv, atk: o.atkA, noShadow: 1, seed: o.x }); ctx.restore(); ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = .35 * f; ctx.fillStyle = '#7a3aff'; ctx.beginPath(); ctx.ellipse(o.x, o.y + 12, 18, 6, 0, 0, TAU); ctx.fill(); ctx.globalAlpha = .9 * f; ctx.fillStyle = '#c070ff'; ctx.fillRect(o.x - 4 + (Math.cos(o.face) < 0 ? -2 : 2), o.y - 46, 2, 2); ctx.fillRect(o.x + 2 + (Math.cos(o.face) < 0 ? -2 : 2), o.y - 46, 2, 2); ctx.restore(); }
+    else if (o.k === 'clone') { const f = Math.min(1, o.t / .2, (o.life - o.t) / .3); ctx.save(); ctx.globalAlpha = .62 * f; drawHero(ctx, tintKey((curSkin() && SPR[P.skin]) ? P.skin : 'chae', 'clone', 'grayscale(1) brightness(.22) contrast(1.6)'), o.x, o.y + 12, (SPR.chae ? .64 : .52) * CLS().scale * 1.08, GT, { flip: Math.cos(o.face) < 0, walk: o.walk, moving: !!o.mv, atk: o.atkA, noShadow: 1, seed: o.x }); ctx.restore(); ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = .35 * f; ctx.fillStyle = '#7a3aff'; ctx.beginPath(); ctx.ellipse(o.x, o.y + 12, 18, 6, 0, 0, TAU); ctx.fill(); ctx.globalAlpha = .9 * f; ctx.fillStyle = '#c070ff'; ctx.fillRect(o.x - 4 + (Math.cos(o.face) < 0 ? -2 : 2), o.y - 46, 2, 2); ctx.fillRect(o.x + 2 + (Math.cos(o.face) < 0 ? -2 : 2), o.y - 46, 2, 2); ctx.restore(); }
   }
   for (const o of THFO) {
     if (o.k === 'dag') { const a = Math.atan2(o.vy, o.vx), s = o.small ? .75 : 1, aw = o.ret || o.back, im = ENG_IMG[aw ? 't_dag_aw' : 't_dag'];
@@ -4180,7 +4194,7 @@ function update(dt) {
   }
   loot = loot.filter(l => !l.gone && l.t < 240);
   for (const p of fx) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= .92; p.vy *= .92; }
-  fx = fx.filter(p => p.t < p.life);
+  fx = fx.filter(p => p.t < p.life); if (fx.length > 700) fx.splice(0, fx.length - 700);
   for (const t of texts) { t.t += dt; t.y -= 38 * dt; t.x += t.vx * dt; }
   texts = texts.filter(t => t.t < .9);
   for (const r of rings) r.t += dt;
@@ -4456,7 +4470,7 @@ function drawNpcs() {
   if (RAID) { TALK = []; return; }
   critDraw(); drawWNodes(); if (CUR !== 'main') drawGatherFx();
   TALK = [];
-  for (const qn of NPCS) { if ((qn.map || 'main') !== CUR) continue; const mm = npcMark(qn); if (mm.mk) DECO.push({ x: tc(qn.tx), y: tc(qn.ty) + 13, deco: () => { const x = tc(qn.tx), y = tc(qn.ty) - 152 + Math.sin(GT * 4) * 4, mk = mm.mk; ctx.save(); ctx.font = '900 30px ' + FDISP(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.shadowColor = mm.glow; ctx.shadowBlur = 16; ctx.lineWidth = 5; ctx.strokeStyle = '#1a1000'; ctx.strokeText(mk, x, y); ctx.fillStyle = mk === '?' ? '#7fffb0' : mm.col; ctx.fillText(mk, x, y); ctx.restore(); } }); }
+  for (const qn of NPCS) { if ((qn.map || 'main') !== CUR) continue; const mm = npcMark(qn); if (mm.mk) DECO.push({ x: tc(qn.tx), y: tc(qn.ty) + 13, deco: () => { const x = tc(qn.tx), y = tc(qn.ty) - 152 + Math.sin(GT * 4) * 4, mk = mm.mk; ctx.save(); ctx.font = '900 30px ' + FDISP(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = .35; circ(x, y, 22, mm.glow); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.lineWidth = 5; ctx.strokeStyle = '#1a1000'; ctx.strokeText(mk, x, y); ctx.fillStyle = mk === '?' ? '#7fffb0' : mm.col; ctx.fillText(mk, x, y); ctx.restore(); } }); }
   for (const n of NPCS) if ((n.map || 'main') === CUR) DECO.push({ x: tc(n.tx), y: tc(n.ty) + 12, deco: () => {
     if (!P.dead && Math.hypot(P.x - tc(n.tx), P.y - tc(n.ty)) < 230) { const bx = tc(n.tx), by = tc(n.ty) - (n.kind === 'raid' ? 122 : 92), w = 98, h = 30; ctx.save(); ctx.fillStyle = 'rgba(40,14,8,.94)'; ctx.strokeStyle = '#ff8a3a'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.roundRect(bx - w / 2, by - h, w, h, 13); ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.moveTo(bx - 7, by); ctx.lineTo(bx, by + 8); ctx.lineTo(bx + 7, by); ctx.closePath(); ctx.fillStyle = '#ff8a3a'; ctx.fill(); ctx.font = '800 15px ' + FDISP(); ctx.fillStyle = '#ffe9c8'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('💬 대화하기', bx, by - h / 2 + .5); ctx.restore(); TALK.push({ x: bx - w / 2 - 6, y: by - h - 8, w: w + 12, h: h + 18, kind: n.kind }); TALK.push({ x: tc(n.tx) - 26, y: tc(n.ty) - 84, w: 52, h: 100, kind: n.kind }); }
     const nim = NPC_IMG[n.kind];
@@ -4494,13 +4508,13 @@ function drawLoot() {
         ctx.translate(l.x, l.y + 2); ctx.scale(1, .42); const rg = ctx.createRadialGradient(0, 0, 0, 0, 0, 62); rg.addColorStop(0, `rgba(${rc},.75)`); rg.addColorStop(1, `rgba(${rc},0)`); ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(0, 0, 62, 0, TAU); ctx.fill();
         ctx.strokeStyle = `rgba(${rc},.9)`; ctx.lineWidth = 3; ctx.setLineDash([10, 8]); ctx.rotate(T * 1.4); ctx.beginPath(); ctx.arc(0, 0, 40, 0, TAU); ctx.stroke(); ctx.rotate(-T * 2.8); ctx.setLineDash([4, 10]); ctx.beginPath(); ctx.arc(0, 0, 54, 0, TAU); ctx.stroke(); ctx.setLineDash([]); }
       ctx.restore();
-      if (Math.random() < (big ? .9 : .3)) fx.push({ x: l.x + rand(-16, 16), y: l.y + rand(-4, 4), vx: rand(-6, 6), vy: -rand(50, big ? 150 : 90), t: 0, life: rand(.6, 1.2), col: big && Math.random() < .4 ? '#ffffff' : col, size: rand(1.4, big ? 3.2 : 2.2) }); }
+      if (Math.random() < (big ? .3 : .08)) fx.push({ x: l.x + rand(-16, 16), y: l.y + rand(-4, 4), vx: rand(-6, 6), vy: -rand(50, big ? 150 : 90), t: 0, life: rand(.6, 1.2), col: big && Math.random() < .4 ? '#ffffff' : col, size: rand(1.4, big ? 3.2 : 2.2) }); }
     if (it.r >= 1) { ctx.globalAlpha = .25 + Math.sin(GT * 5) * .1; circ(l.x, l.y + bob, 14, col); ctx.globalAlpha = 1; }
     const iim = ITEM_IMG[iconKey(it)];
-    if (iim) { const isz = it.r >= 3 ? 34 + Math.sin(GT * 5) * 2 : it.r >= 2 ? 30 : 26; ctx.save(); if (it.set) ctx.filter = ifilt(it); ctx.shadowColor = col; ctx.shadowBlur = it.r >= 3 ? 24 : it.r ? 10 : 0; ctx.drawImage(iim, l.x - isz / 2, l.y - isz / 2 + bob, isz, isz); ctx.restore(); }
+    if (iim) { const isz = it.r >= 3 ? 34 + Math.sin(GT * 5) * 2 : it.r >= 2 ? 30 : 26, li = it.set && ifilt(it) ? filtImg(iim, 'it' + iconKey(it), ifilt(it)) : iim; if (it.r >= 2) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = it.r >= 3 ? .4 : .25; circ(l.x, l.y + bob, isz * (it.r >= 3 ? .8 : .6), col); ctx.restore(); } ctx.drawImage(li, l.x - isz / 2, l.y - isz / 2 + bob, isz, isz); }
     else { ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(l.x, l.y - 8 + bob); ctx.lineTo(l.x + 7, l.y + bob); ctx.lineTo(l.x, l.y + 8 + bob); ctx.lineTo(l.x - 7, l.y + bob); ctx.fill(); }
     const near = Math.hypot(P.x - l.x, P.y - l.y) < 200;
-    if (it.r >= 3) { ctx.save(); ctx.shadowColor = col; ctx.shadowBlur = 12; label(it.name, l.x, l.y - 24 + bob, col, 13, 800); ctx.restore(); } else if (it.r >= 1 || near) label(it.name, l.x, l.y - 14 + bob, col, it.r >= 2 ? 12 : 11, it.r >= 2 ? 700 : 500);
+    if (it.r >= 3) label(it.name, l.x, l.y - 24 + bob, col, 13, 800); else if (it.r >= 1 || near) label(it.name, l.x, l.y - 14 + bob, col, it.r >= 2 ? 12 : 11, it.r >= 2 ? 700 : 500);
   }
 }
 function drawMob(e) {
@@ -4526,10 +4540,10 @@ function drawMob(e) {
     else { const mv = e.state !== 'idle' ? Math.abs(Math.sin(t * 9)) * .05 : Math.sin(t * 2) * .015; sy = 1 + mv; sx = 1 - mv * .5; }
     const flip = Math.cos(e.face) < 0 ? -1 : 1;
     ctx.save(); ctx.translate(x + lx, foot + ly); ctx.scale(sx * flip, sy); ctx.rotate((e.state !== 'idle' && !d.fly && d.shape !== 'blob' && !e.boss ? Math.sin(t * 9) * .06 : 0) - (e.hit > 0 ? Math.min(1, e.hit / .12) * (e.boss ? .05 : .2) : 0));
-    if (e.boss || e.elite) { ctx.shadowColor = e.boss ? (d.final ? 'rgba(255,80,20,.95)' : 'rgba(255,60,40,.8)') : 'rgba(255,210,80,.8)'; ctx.shadowBlur = e.boss ? 24 : 12; }
+    if (e.boss || e.elite) { const au = silTint(art[0], e.boss ? (d.final ? '#ff5014' : '#ff3c28') : '#ffd250'); if (au) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = (e.boss ? .4 : .3) + Math.sin(e.anim * 6) * .1; const gw = ww * 1.1, gh = hh * 1.07; ctx.drawImage(au, -gw / 2, -gh, gw, gh); ctx.restore(); } }
     if (d.filt) ctx.filter = d.filt;
     ctx.drawImage(im, -ww / 2, -hh, ww, hh);
-    ctx.filter = 'none'; ctx.shadowBlur = 0;
+    if (d.filt) ctx.filter = 'none';
     if ((e.frz > 0 || e.slowT > 0) && MOB_WHITE[art[0]]) { const ic = iceSil(art[0]); if (ic) { ctx.globalAlpha = e.frz > 0 ? .62 : .3; ctx.drawImage(ic, -ww / 2, -hh, ww, hh); ctx.globalAlpha = 1; } if (e.frz > 0) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = .55; ctx.fillStyle = '#bfefff'; for (let q = 0; q < 4; q++) { const qx = (q - 1.5) * ww * .22, qy = -hh * (.2 + (q % 2) * .35); ctx.beginPath(); ctx.moveTo(qx, qy - 7); ctx.lineTo(qx + 3, qy); ctx.lineTo(qx, qy + 7); ctx.lineTo(qx - 3, qy); ctx.fill(); } ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; } }
     if (e.hit > 0 && MOB_WHITE[art[0]]) { ctx.globalAlpha = Math.min(1, e.hit / .12) * (e.boss ? .22 : .55); ctx.drawImage(MOB_WHITE[art[0]], -ww / 2, -hh, ww, hh); ctx.globalAlpha = 1; }
     ctx.restore();
@@ -4853,6 +4867,16 @@ const AV_WDATA = {"mikC3":"data:image/webp;base64,UklGRjCEAABXRUJQVlA4WAoAAAAwAA
 Object.assign(WALK_META, AV_WMETA); Object.assign(WALK_DATA, AV_WDATA);
 for (const k of Object.keys(WALK_META)) { const im = new Image(); im.onload = () => { WALK[k] = im; buildMask('w' + k, im, WALK_META[k]); }; im.src = WALK_DATA[k]; }
 const sprFrame = A => (A == null || A < 0 || A >= 1) ? 0 : A < .28 ? 1 : A < .55 ? 2 : 3;
+// 색 변형 스프라이트 시트(아군·은신·피격·분신): filter를 매 프레임 거는 대신 시트 전체를 한 번만 변환해 새 키로 등록
+const TSHEET = {};
+function tintKey(k, tag, filt) {
+  const nk = k + '~' + tag; if (SPR[nk]) return nk; if (TSHEET[nk]) return k;
+  const s = SPR[k]; if (!s || !s.width || !SPR_META[k]) return k; TSHEET[nk] = 1;
+  const mk = im => { const c = document.createElement('canvas'); c.width = im.width; c.height = im.height; const x = c.getContext('2d'); x.filter = filt; x.drawImage(im, 0, 0); x.filter = 'none'; return c; };
+  SPR[nk] = mk(s); SPR_META[nk] = SPR_META[k]; SKIN_BASE[nk] = SKIN_BASE[k] || k; if (WSEG[k]) WSEG[nk] = WSEG[k];
+  if (WALK[k] && WALK[k].width && WALK_META[k]) { WALK[nk] = mk(WALK[k]); WALK_META[nk] = WALK_META[k]; }
+  return nk;
+}
 function drawSprite(g, k, x, y, s, t, o) {
   const A = o.atk == null ? -1 : o.atk, walking = o.moving && A < 0 && WALK[k];
   const M = walking ? WALK_META[k] : SPR_META[k], img = walking ? WALK[k] : SPR[k];
@@ -4896,8 +4920,8 @@ function drawHero(g, k, x, y, s, t, o = {}) {
 }
 function drawAlly(a) {
   ell(a.x, a.y + 12, 13, 4.5, 'rgba(0,0,0,.35)');
-  ctx.save(); ctx.globalAlpha = .92; ctx.filter = a.hit > 0 ? 'brightness(2.2)' : 'sepia(.55) hue-rotate(-28deg) saturate(1.3) brightness(.9)';
-  drawHero(ctx, 'mun', a.x, a.y + 12, .52, GT, { flip: Math.cos(a.face) < 0, walk: a.walk, moving: a.moving, atk: a.atkA, noShadow: 1, seed: a.slot });
+  ctx.save(); ctx.globalAlpha = .92; const ak = a.hit > 0 ? tintKey('mun', 'hit', 'brightness(2.2)') : tintKey('mun', 'ally', 'sepia(.55) hue-rotate(-28deg) saturate(1.3) brightness(.9)');
+  drawHero(ctx, ak, a.x, a.y + 12, .52, GT, { flip: Math.cos(a.face) < 0, walk: a.walk, moving: a.moving, atk: a.atkA, noShadow: 1, seed: a.slot });
   ctx.restore();
   const w = 34, top = a.y - 62; ctx.fillStyle = 'rgba(0,0,0,.65)'; ctx.fillRect(a.x - w / 2 - 1, top - 1, w + 2, 6); ctx.fillStyle = '#d9a94a'; ctx.fillRect(a.x - w / 2, top, w * Math.max(0, a.hp / a.maxHp), 4);
 }
@@ -4910,10 +4934,11 @@ function drawPlayer() {
   ell(x, y + 12, 18.5 * C.scale, 6.5, 'rgba(0,0,0,.4)');
   ctx.save();
   if (P.inv > 0 && Math.floor(GT * 20) % 2) ctx.globalAlpha = .55;
-  if (P.hurtT > 0) ctx.filter = 'brightness(2.4)';
+  let pk = (curSkin() && SPR[P.skin]) ? P.skin : (P.cls || 'mun');
+  if (P.hurtT > 0) pk = tintKey(pk, 'hurt', 'brightness(2.4)');
   ctx.globalAlpha *= warpAlpha();
-  if (P.stealthT > 0) { ctx.globalAlpha *= .42; if (P.stealthAw && !(P.hurtT > 0)) ctx.filter = 'sepia(1) hue-rotate(-45deg) saturate(5) brightness(.75)'; }
-  drawHero(ctx, (curSkin() && SPR[P.skin]) ? P.skin : (P.cls || 'mun'), x, y + 12, (SPR[P.cls] ? .64 : .52) * C.scale * 1.08, GT, { flip: Math.cos(P.face) < 0, flipS: playerFlip(), walk: P.walk, moving, lean: Math.min(1, Math.hypot(moveVec.x, moveVec.y)), pick: P.gather ? P.gather.t : -1, noShadow: 1, atk: P.atkA, spin: P.whirlT > 0, enh: P.eq.weapon ? P.eq.weapon.enh : 0 });
+  if (P.stealthT > 0) { ctx.globalAlpha *= .42; if (P.stealthAw && !(P.hurtT > 0)) pk = tintKey(pk, 'st', 'sepia(1) hue-rotate(-45deg) saturate(5) brightness(.75)'); }
+  drawHero(ctx, pk, x, y + 12, (SPR[P.cls] ? .64 : .52) * C.scale * 1.08, GT, { flip: Math.cos(P.face) < 0, flipS: playerFlip(), walk: P.walk, moving, lean: Math.min(1, Math.hypot(moveVec.x, moveVec.y)), pick: P.gather ? P.gather.t : -1, noShadow: 1, atk: P.atkA, spin: P.whirlT > 0, enh: P.eq.weapon ? P.eq.weapon.enh : 0 });
   ctx.restore();
   const ol = skLv('orbit');
   if (ol && !inTown()) { const n = pickL(SKILLS.orbit.n, ol); for (let k = 0; k < n * (ol >= 6 ? 2 : 1); k++) { const outer = k >= n, a = outer ? -P.orbA * 1.15 + (k - n) / n * TAU : P.orbA + k / n * TAU, RR = outer ? 102 : 60, bx = x + Math.cos(a) * RR, by = y - 8 + Math.sin(a) * RR * .55; if (fxDraw('blade', bx, by, 40, a + GT * 14, 1)) continue; ctx.save(); ctx.translate(bx, by); ctx.rotate(a + GT * 12); ctx.globalAlpha = .35; circ(0, 0, 13, '#ffcf8a'); ctx.globalAlpha = 1; ctx.fillStyle = '#e8ecf0'; ctx.beginPath(); ctx.moveTo(12, 0); ctx.quadraticCurveTo(0, -7, -10, 0); ctx.quadraticCurveTo(0, 3, 12, 0); ctx.fill(); ctx.restore(); } }
@@ -4959,9 +4984,9 @@ function draw() {
   const zvTl = ZV ? 42 * zvE() * ZV.tiltK * Math.PI / 180 : 0, zvBB = zvTl ? 1 + (1 / Math.cos(zvTl) - 1) * 1.15 : 1, zvRt = ZV ? -ZV.rot * zvE() * Math.PI / 180 : 0;
   for (const e of ents) { const up = zvBB > 1.001 || Math.abs(zvRt) > .002; if (up) { const fy = e.y + (e.isMob ? e.r * .8 : e.deco ? 0 : 12), fx0 = e.deco ? (e.x != null ? e.x : P.x) : e.x; ctx.save(); ctx.translate(fx0, fy); ctx.rotate(zvRt); ctx.scale(1, zvBB); ctx.translate(-fx0, -fy); } e.deco ? e.deco() : e === P ? drawPlayer() : e.isAlly ? drawAlly(e) : drawMob(e); if (up) ctx.restore(); }
   for (const q of sfx) { const k = q.t / q.life; fxDraw(q.k, q.x, q.y, q.w * (q.g0 + (q.g1 - q.g0) * k), q.rot + q.spin * q.t, q.a * Math.min(1, (1 - k) * 2.2), q.sq, 0, q.n); }
-  for (const c of chains) { const k = 1 - c.t / .3; ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = `rgba(190,220,255,${k})`; ctx.shadowColor = '#9fc4ff'; ctx.shadowBlur = 12; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(c.x1, c.y1); for (let j = 1; j < 6; j++) { const f = j / 6; ctx.lineTo(c.x1 + (c.x2 - c.x1) * f + Math.sin(c.seed + j * 2.7) * 12, c.y1 + (c.y2 - c.y1) * f + Math.cos(c.seed + j * 1.9) * 12); } ctx.lineTo(c.x2, c.y2); ctx.stroke(); ctx.restore(); }
+  for (const c of chains) { const k = 1 - c.t / .3; ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(c.x1, c.y1); for (let j = 1; j < 6; j++) { const f = j / 6; ctx.lineTo(c.x1 + (c.x2 - c.x1) * f + Math.sin(c.seed + j * 2.7) * 12, c.y1 + (c.y2 - c.y1) * f + Math.cos(c.seed + j * 1.9) * 12); } ctx.lineTo(c.x2, c.y2); ctx.strokeStyle = `rgba(159,196,255,${k * .35})`; ctx.lineWidth = 8; ctx.stroke(); ctx.strokeStyle = `rgba(190,220,255,${k})`; ctx.lineWidth = 2.5; ctx.stroke(); ctx.restore(); }
   for (const z of strikes) if (FXI.bolt) { const k = 1 - z.t / .35, im = FXI.bolt, h = 300, w = h * im.width / im.height; fxDraw('bolt', z.x + 4, z.y - h / 2 + 10, w * (1 + (z.seed % 1) * .3), 0, k * 1.2, 1, h); fxDraw('shock', z.x, z.y, 110 * (1.3 - k * .6), 0, k); }
-  for (const z of strikes) if (!FXI.bolt) { const k = 1 - z.t / .35; ctx.save(); ctx.globalAlpha = k; ctx.strokeStyle = '#e8f0ff'; ctx.lineWidth = 3; ctx.shadowColor = '#9fc4ff'; ctx.shadowBlur = 14; ctx.beginPath(); let px = z.x + 10, py = z.y - 260; ctx.moveTo(px, py); for (let j = 1; j <= 7; j++) { px = z.x + Math.sin(z.seed + j * 2.3) * 14 * (1 - j / 7); py = z.y - 260 + j * 260 / 7; ctx.lineTo(px, py); } ctx.stroke(); ctx.globalAlpha = k * .5; circ(z.x, z.y, 22 * k + 6, '#cfe0ff'); ctx.restore(); }
+  for (const z of strikes) if (!FXI.bolt) { const k = 1 - z.t / .35; ctx.save(); ctx.globalAlpha = k; ctx.strokeStyle = '#e8f0ff'; ctx.lineWidth = 3; ctx.beginPath(); let px = z.x + 10, py = z.y - 260; ctx.moveTo(px, py); for (let j = 1; j <= 7; j++) { px = z.x + Math.sin(z.seed + j * 2.3) * 14 * (1 - j / 7); py = z.y - 260 + j * 260 / 7; ctx.lineTo(px, py); } ctx.stroke(); ctx.globalAlpha = k * .5; circ(z.x, z.y, 22 * k + 6, '#cfe0ff'); ctx.restore(); }
   drawWalls(x0 - 2, y0 - 1, x1, y1 + 1);
   if (HOUSE) { const d = HOUSE.door, im = INT_IMG.p_door, dx = tc(d.tx), dy = tc(d.ty) + 6; if (im) { const w = 58, hh = w * im.height / im.width; ctx.drawImage(im, dx - w / 2, dy - hh, w, hh); } else { ctx.fillStyle = '#120c08'; ctx.fillRect(dx - 18, dy - 40, 36, 40); } label('나가기', dx, dy - 84, '#d8c8a8', 11); }
   for (const p of pshots) {
@@ -4981,10 +5006,10 @@ function draw() {
   // 어둠: 플레이어 주변만 밝게
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   drawAtmos();
-  { const vg = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * .16, W / 2, H / 2, Math.max(W, H) * .62);
+  ctx.drawImage(fsCanvas('vig', g => { const vg = g.createRadialGradient(W / 2, H / 2, Math.min(W, H) * .16, W / 2, H / 2, Math.max(W, H) * .62);
     vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(.55, "rgba(10,2,4,.38)"); vg.addColorStop(1, "rgba(3,0,1,.86)");
-    ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = "rgba(40,10,25,.16)"; ctx.fillRect(0, 0, W, H); }
+    g.fillStyle = vg; g.fillRect(0, 0, W, H);
+    g.fillStyle = "rgba(40,10,25,.16)"; g.fillRect(0, 0, W, H); }), 0, 0, W, H);
   // 조이스틱
   if (joy && joy.active) {
     ctx.globalAlpha = .35; circ(joy.ox, joy.oy, 54, '#000'); ctx.globalAlpha = .5;
@@ -4993,9 +5018,9 @@ function draw() {
   }
   // 저체력 붉은 테두리
   if (started && !P.dead && P.hp / S.maxHp < .3) {
-    const g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * .35, W / 2, H / 2, Math.max(W, H) * .7);
-    g.addColorStop(0, 'rgba(160,0,0,0)'); g.addColorStop(1, `rgba(160,0,0,${.35 + Math.sin(GT * 6) * .1})`);
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    ctx.globalAlpha = (.35 + Math.sin(GT * 6) * .1) / .45;
+    ctx.drawImage(fsCanvas('lowhp', g => { const gr = g.createRadialGradient(W / 2, H / 2, Math.min(W, H) * .35, W / 2, H / 2, Math.max(W, H) * .7); gr.addColorStop(0, 'rgba(160,0,0,0)'); gr.addColorStop(1, 'rgba(160,0,0,.45)'); g.fillStyle = gr; g.fillRect(0, 0, W, H); }), 0, 0, W, H);
+    ctx.globalAlpha = 1;
   }
 }
 
@@ -5047,20 +5072,25 @@ function drawMini() {
 // ───────── HUD ─────────
 function setBar(el, v, max, txt) { el.querySelector('i').style.width = clamp(v / max * 100, 0, 100) + '%'; const sp = el.querySelector('span'); if (sp && txt != null) sp.textContent = txt; }
 const hpb = $('#hpb'), mpb = $('#mpb'), xpb = $('#xpb');
+let HUD_GEO = 1;
+// 같은 값이면 DOM을 건드리지 않음 (textContent/innerHTML 교체는 매번 레이아웃을 유발)
+const setT = (sel, v) => { const el = $(sel); if (el && el._t !== v) { el._t = v; el.textContent = v; } };
+const setH = (sel, v) => { const el = $(sel); if (el && el._h !== v) { el._h = v; el.innerHTML = v; } };
 function updHud() {
   setBar(hpb, P.hp, S.maxHp, `${fmt(Math.max(0, P.hp))} / ${fmt(S.maxHp)}`);
   setBar(mpb, P.mp, S.maxMp, `${fmt(P.mp)} / ${fmt(S.maxMp)}`);
   setBar(xpb, P.xp, xpNeed(P.lv));
-  $('#lvl').innerHTML = `Lv ${P.lv} <small style="color:${CLS().col}">${CLS().name}</small>`;
-  $('#gold').textContent = `${fmt(P.gold)} 골드`; { const cp = combatPower(); if (cp !== P._cpShown) { if (P._cpShown != null && started) cpToast(P._cpShown, cp); P._cpShown = cp; $('#cp').innerHTML = `전투력 <b>${fmt(cp)}</b>`; } }
-  $('#pts').textContent = P.pts ? `능력치 포인트 ${P.pts}` : '';
-  $('#pot-n').textContent = P.pots; syncStepTog(); { const si = $('#swarmInfo'); if (RAID) { const R = RAIDS[RAID.k], t = RAID.done ? RAID.tm : GT - RAID.t0, f = v => Math.floor(v / 60) + ':' + String(Math.floor(v % 60)).padStart(2, '0'); si.style.opacity = RAID.done ? 1 : 0; si.textContent = RAID.done ? `레이드 클리어 ${f(t)} · 나가는 문으로` : ''; si.style.color = RAID.mult > 1 ? '#ff4a2a' : '#ffb48a'; } else { si.style.opacity = swarmOn ? 1 : 0; si.style.color = ''; if (swarmOn) si.textContent = `무리 습격 · 남은 적 ${swarmOn.left}`; } }
+  setH('#lvl', `Lv ${P.lv} <small style="color:${CLS().col}">${CLS().name}</small>`);
+  setT('#gold', `${fmt(P.gold)} 골드`); { const cp = combatPower(); if (cp !== P._cpShown) { if (P._cpShown != null && started) cpToast(P._cpShown, cp); P._cpShown = cp; $('#cp').innerHTML = `전투력 <b>${fmt(cp)}</b>`; } }
+  setT('#pts', P.pts ? `능력치 포인트 ${P.pts}` : '');
+  setT('#pot-n', String(P.pots)); syncStepTog(); { const si = $('#swarmInfo'); if (RAID) { const R = RAIDS[RAID.k], t = RAID.done ? RAID.tm : GT - RAID.t0, f = v => Math.floor(v / 60) + ':' + String(Math.floor(v % 60)).padStart(2, '0'); si.style.opacity = RAID.done ? 1 : 0; si.textContent = RAID.done ? `레이드 클리어 ${f(t)} · 나가는 문으로` : ''; si.style.color = RAID.mult > 1 ? '#ff4a2a' : '#ffb48a'; } else { si.style.opacity = swarmOn ? 1 : 0; si.style.color = ''; if (swarmOn) si.textContent = `무리 습격 · 남은 적 ${swarmOn.left}`; } }
   { const qt = $('#qTrack'), qb = $('#qBody'); const h = RAID ? '' : questHud(); if (h) { if (qb.innerHTML !== h) qb.innerHTML = h; qt.hidden = false; } else qt.hidden = true; }
   { const ce = $('#combo'); if (P.combo >= 5) { ce.style.opacity = 1; ce.querySelector('b').textContent = P.combo; ce.querySelector('small').textContent = P.frenzy > 0 ? '광폭화 ' + Math.ceil(P.frenzy) + '초' : P.combo < 50 ? '연속 처치 · 50 광폭화' : '연속 처치 · 100마다 천벌'; ce.querySelector('i').style.transform = 'scaleX(' + Math.max(0, P.comboT / 3) + ')'; ce.classList.toggle('fr', P.frenzy > 0); } else ce.style.opacity = 0; }
-  { const bb = $('#bossbar'), st = $('#stat').getBoundingClientRect(), sb = st.bottom; if (!bb.hidden) { const r0 = bb.getBoundingClientRect(); if (r0.left < st.right && r0.top < sb) bb.style.top = Math.round(sb + 6) + 'px'; } const bbb = !bb.hidden ? bb.getBoundingClientRect().bottom : 0; $('#qTrack').style.top = Math.round(Math.max(sb, bbb) + 8) + 'px'; }
+  // 레이아웃 측정(getBoundingClientRect)은 강제 리플로우라서 1초에 한 번 또는 창 크기·보스바 변화 때만
+  { P._geoT = (P._geoT || 0) - .08; if (HUD_GEO || P._geoT <= 0) { HUD_GEO = 0; P._geoT = 1; const bb = $('#bossbar'), st = $('#stat').getBoundingClientRect(), sb = st.bottom; if (!bb.hidden) { const r0 = bb.getBoundingClientRect(); if (r0.left < st.right && r0.top < sb) bb.style.top = Math.round(sb + 6) + 'px'; } const bbb = !bb.hidden ? bb.getBoundingClientRect().bottom : 0; $('#qTrack').style.top = Math.round(Math.max(sb, bbb) + 8) + 'px'; } }
   { const ids = Object.keys(P.sk || {}), tray = $('#skTray'), key = ids.map(i => i + P.sk[i]).join(',');
     if (tray.dataset.k !== key) { tray.dataset.k = key; tray.innerHTML = ids.map(i => `<span class="skc${P.sk[i] >= SK_AW ? ' aw' : ''}" data-id="${i}">${P.sk[i] >= SK_AW ? AWAKEN[i].name : SKILLS[i].name}<b>${P.sk[i]}</b></span>`).join(''); } }
-  $('#bag-n').textContent = `${P.bag.length}`;
+  setT('#bag-n', `${P.bag.length}`);
   P._upT = (P._upT || 0) - .08; if (P._upT <= 0) { P._upT = .5; const cur = {}; for (const sl of SLOTS) cur[sl] = cpWith(P.eq[sl] || null, sl); const up = P.bag.some(x => !(x.wcls && x.wcls !== P.cls) && cpWith(x) > cur[x.slot]); P._hasUp = up; $('#sk-i').classList.toggle('up', up); $('#sk-i').classList.toggle('spt', (P.spts || 0) > 0 || (P.pts || 0) > 0 || up); }
   const cd = (id, v, max) => { const el = $(id + ' .cd'), f = clamp(v / max, 0, 1); if (id === '#sk-r') { el.style.height = '100%'; el.style.background = f > 0 ? `conic-gradient(rgba(0,0,0,.68) ${(f * 100).toFixed(1)}%, transparent 0)` : 'none'; } else el.style.height = f * 100 + '%'; };
   cd('#sk-q', P.whirlCD, 4 * (S.powers.whirl ? .6 : 1)); cd('#sk-e', P.dashCD, 5 * S.dashMul); cd('#sk-r', P.potCD, 1);
@@ -5069,14 +5099,14 @@ function updHud() {
   // 보스 바
   let boss = null; for (const m of mobs) if (m.boss && m.hp > 0 && Math.hypot(m.x - P.x, m.y - P.y) < 650) boss = m;
   const bb = $('#bossbar');
-  if (boss) { bb.hidden = false; bb.querySelector('.nm').textContent = `${boss.d.name} · Lv ${boss.lv}`; setBar(bb.querySelector('.bar'), boss.hp, boss.maxHp, `${fmt(boss.hp)} / ${fmt(boss.maxHp)}`); }
-  else bb.hidden = true;
+  if (boss) { if (bb.hidden) { bb.hidden = false; HUD_GEO = 1; } const bn = bb.querySelector('.nm'), bt = `${boss.d.name} · Lv ${boss.lv}`; if (bn._t !== bt) { bn._t = bt; bn.textContent = bt; } setBar(bb.querySelector('.bar'), boss.hp, boss.maxHp, `${fmt(boss.hp)} / ${fmt(boss.maxHp)}`); }
+  else if (!bb.hidden) { bb.hidden = true; HUD_GEO = 1; }
   const rb = $('#recallBar');
   if (P.recall > 0) { rb.hidden = false; setBar(rb.querySelector('.bar'), 1.6 - P.recall, 1.6); } else rb.hidden = true;
   // 상호작용
   const it = nearInteract(); const pr = $('#prompt');
   if (it && (['shop', 'forge', 'raid', 'craft', 'quest', 'garet_n'].includes(it.kind) || SUBNPC[it.kind] || AUTO_KINDS.includes(it.kind))) { pr.hidden = true; return; }
-  if (it && !P.dead) { pr.hidden = false; pr.innerHTML = `<kbd>${TOUCH ? '눌러서' : 'F'}</kbd>${it.label}`; } else pr.hidden = true;
+  if (it && !P.dead) { pr.hidden = false; const ph = `<kbd>${TOUCH ? '눌러서' : 'F'}</kbd>${it.label}`; if (pr._h !== ph) { pr._h = ph; pr.innerHTML = ph; } } else pr.hidden = true;
 }
 function nearInteract() {
   if (HOUSE) { if (Math.hypot(P.x - tc(HOUSE.out.tx), P.y - tc(HOUSE.out.ty)) < 54) return { kind: 'houseOut', label: '폐가에서 나가기' }; if (Math.hypot(P.x - HOUSE.chest.x, P.y - HOUSE.chest.y) < 70) return { kind: 'chest', label: chestReady(HOUSE.h.id) ? '잠긴 상자: 자물쇠 따기' : '빈 상자 (10분마다 다시 채워짐)' }; return null; }
