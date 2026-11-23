@@ -2934,7 +2934,7 @@ Object.assign(CHAT2, {
 });
 
 // ───────── 배경음악 (실시간 생성형 다크 앰비언트) ─────────
-const BGM = (() => {
+const BGM_SYN = (() => {
   let ac = null, master, wet, dry, delayIn, mood = null, timers = [], droneNodes = [], noiseNode = null, noiseGain = null, noiseFilt = null, on = true, vol = .55;
   try { const sv = JSON.parse(localStorage.getItem('sf-bgm') || '{}'); if (sv.on === false) on = false; if (sv.vol != null) vol = sv.vol; } catch (e) {}
   const persist = () => { try { localStorage.setItem('sf-bgm', JSON.stringify({ on, vol })); } catch (e) {} };
@@ -3008,6 +3008,46 @@ const BGM = (() => {
     get on() { return on; }, get vol() { return vol; },
   };
 })();
+// ───────── 배경음악: CC0 녹음 곡 (OpenGameArt) · 지역이 바뀌면 2초 동안 교차 페이드 · 못 불러오면 합성 음악으로 대체 ─────────
+// town: cynicmusic 「Town Theme RPG」 · field: DST 「GrassLands Theme」 · forest: 「Dark Forest Theme」 · ruin: 「Negev Desert」
+// canyon: 「Evil temple ambiance loop」 · grave: 「Moonlit Lullaby for the Lost」 · snow: 「Snow Theme」 · crypt: 「Dungeon Ambience」
+// house: 「Dark Cavern Ambient」 · raid: Juhani Junkala 「Epic Boss Battle」 — 모두 CC0
+const BGM = (() => {
+  const FILES = { town: 'town', field: 'field', forest: 'forest', ruin: 'ruin', canyon: 'canyon', grave: 'grave', snow: 'snow', crypt: 'crypt', house: 'house', raid: 'raid' };
+  const LV = { town: .8, field: .75, forest: .8, ruin: .75, canyon: .85, grave: .85, snow: .8, crypt: 1, house: 1, raid: .7 };
+  let ac = null, master = null, mood = null, on = BGM_SYN.on, vol = BGM_SYN.vol, cur = null, failed = false; const tr = {};
+  function init() { if (ac) return; const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return; ac = new AC(); master = ac.createGain(); master.gain.value = 0; master.connect(ac.destination); }
+  function track(m) {
+    if (tr[m]) return tr[m];
+    const el = new Audio(); el.src = 'music/' + FILES[m] + '.mp3'; el.loop = true; el.preload = 'auto'; el.crossOrigin = 'anonymous';
+    const T = tr[m] = { el, g: null, ok: null };
+    el.addEventListener('canplay', () => { T.ok = true; }, { once: true });
+    el.addEventListener('error', () => { T.ok = false; if (mood === m) useSynth(); }, { once: true });
+    try { const src = ac.createMediaElementSource(el); T.g = ac.createGain(); T.g.gain.value = 0; src.connect(T.g); T.g.connect(master); } catch (e) { T.ok = false; }
+    return T;
+  }
+  function useSynth() { if (failed) return; failed = true; for (const k in tr) { try { tr[k].el.pause(); } catch (e) {} } if (on) { if (!BGM_SYN.on) BGM_SYN.toggle(); BGM_SYN.setVol(vol); BGM_SYN.start(); BGM_SYN.mood(mood || 'town'); } }
+  function switchTo(m) {
+    if (failed) { BGM_SYN.mood(m); return; }
+    const n = ac.currentTime, nx = track(m);
+    if (nx.ok === false) { useSynth(); return; }
+    if (cur && cur !== nx) { const old = cur; old.g.gain.cancelScheduledValues(n); old.g.gain.setTargetAtTime(0, n, .6); setTimeout(() => { if (cur !== old) try { old.el.pause(); } catch (e) {} }, 3500); }
+    cur = nx; nx.g.gain.cancelScheduledValues(n); nx.g.gain.setTargetAtTime(LV[m] || .8, n + .2, .7);
+    if (nx.el.paused) { if (m === 'raid') nx.el.currentTime = 0; const p = nx.el.play(); if (p && p.catch) p.catch(() => {}); }
+  }
+  // 합성 음악은 꺼 둔 채로 대기(녹음을 못 불러오면 그때 켬)
+  if (BGM_SYN.on) { try { BGM_SYN.toggle(); } catch (e) {} } try { localStorage.setItem('sf-bgm', JSON.stringify({ on, vol })); } catch (e) {}
+  const persist = () => { try { localStorage.setItem('sf-bgm', JSON.stringify({ on, vol })); } catch (e) {} };
+  return {
+    start() { if (!on) return; init(); if (!ac) return; ac.resume && ac.resume(); if (failed) { BGM_SYN.start(); return; } master.gain.setTargetAtTime(vol * .9, ac.currentTime, 1.2); const m = mood || 'town'; mood = null; this.mood(m); },
+    mood(m) { if (!FILES[m] || m === mood) return; mood = m; if (!ac || !on) return; switchTo(m); },
+    toggle() { on = !on; persist(); if (failed) { BGM_SYN.toggle(); return on; } if (on) { init(); if (!ac) return on; ac.resume(); master.gain.setTargetAtTime(vol * .9, ac.currentTime, .8); const m = mood || 'town'; mood = null; this.mood(m); } else if (ac) { master.gain.setTargetAtTime(0, ac.currentTime, .4); setTimeout(() => { if (!on) for (const k in tr) try { tr[k].el.pause(); } catch (e) {} }, 1500); } return on; },
+    setVol(v) { vol = v; persist(); if (failed) { BGM_SYN.setVol(v); return; } if (ac && on) master.gain.setTargetAtTime(vol * .9, ac.currentTime, .2); },
+    duck(d) { if (failed) { BGM_SYN.duck(d); return; } if (!ac || !on) return; const n = ac.currentTime; master.gain.cancelScheduledValues(n); master.gain.setTargetAtTime(vol * .9 * .4, n, .04); master.gain.setTargetAtTime(vol * .9, n + d, .6); },
+    get on() { return on; }, get vol() { return vol; },
+  };
+})();
+
 function bgmZone() { if (!started) return; const z = RAID ? 'raid' : HOUSE ? 'house' : CUR === 'snow' ? 'snow' : CUR === 'crypt' ? 'crypt' : ({ 0: 'town', 1: 'field', 2: 'forest', 3: 'ruin', 4: 'canyon', 5: 'grave' })[zoneAt(P.x, P.y)] || 'field'; BGM.mood(z); }
 
 // ───────── 효과음 (합성 · 동시 재생 제한) ─────────
