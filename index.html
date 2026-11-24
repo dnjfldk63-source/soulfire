@@ -920,6 +920,22 @@ function blocked(e, x, y) {
   if (solidAt(x - r, y - r) || solidAt(x + r, y - r) || solidAt(x - r, y + r) || solidAt(x + r, y + r)) return true;
   return e.isMob && zoneAt(x, y) === 0;
 }
+// 플레이어가 순간이동해도 되는 자리인가: 몸이 벽·물에 안 걸치고, 지금 자리에서 걸어서 이어지는 곳(벽 너머 갇힌 공간 X)
+function walkTo(x, y, R = 30) {
+  if (blocked(P, x, y)) return false;
+  const s0 = tIdx(P.x, P.y), g = tIdx(x, y); if (s0 < 0 || g < 0) return false; if (s0 === g) return true;
+  const sx = s0 % MW, sy = (s0 / MW) | 0, seen = new Set([s0]), q = [s0];
+  for (let h = 0; h < q.length && q.length < 5000; h++) { const i = q[h]; for (const j of [i + 1, i - 1, i + MW, i - MW]) { if (seen.has(j) || tile[j] === T_WALL || tile[j] === T_LIQ) continue; const jx = j % MW, jy = (j / MW) | 0; if (Math.abs(jx - sx) > R || Math.abs(jy - sy) > R) continue; if (j === g) return true; seen.add(j); q.push(j); } }
+  return false;
+}
+// 끼임 탈출: 몸이 벽에 걸쳐 있으면 가장 가까운, 충분히 넓은 빈자리로 옮김
+function unstick() {
+  const tx = Math.floor(P.x / TS), ty = Math.floor(P.y / TS), C = [];
+  for (let dy = -8; dy <= 8; dy++) for (let dx = -8; dx <= 8; dx++) { const x = tx + dx, y = ty + dy; if (x < 1 || y < 1 || x >= MW - 1 || y >= MH - 1) continue; const px = tc(x), py = tc(y); if (!blocked(P, px, py)) C.push([Math.hypot(px - P.x, py - P.y), px, py, y * MW + x]); }
+  C.sort((a, b) => a[0] - b[0]);
+  for (const [, px, py, s0] of C) { const seen = new Set([s0]), q = [s0]; for (let h = 0; h < q.length && q.length < 80; h++) for (const j of [q[h] + 1, q[h] - 1, q[h] + MW, q[h] - MW]) if (!seen.has(j) && tile[j] !== T_WALL && tile[j] !== T_LIQ) { seen.add(j); q.push(j); } if (q.length >= 80) { P.x = px; P.y = py; P.dash = null; return true; } }
+  return false;
+}
 function moveE(e, dx, dy) {
   let moved = false;
   if (dx && !blocked(e, e.x + dx, e.y)) { e.x += dx; moved = true; }
@@ -3744,7 +3760,7 @@ function thfTick(dt) {
       if (o.next <= 0) {
         const m = o.list.shift(); if (!m || P.dead) { o.done = 1; continue; } if (m.hp <= 0) { const alt = o.list.find(x => x.hp > 0); if (!alt) { o.done = 1; continue; } o.list.unshift(alt); o.next = 0; continue; }
         const a = Math.atan2(m.y - P.y, m.x - P.x); for (let q = 0; q < 6; q++) fx.push({ x: P.x + rand(-8, 8), y: P.y - rand(0, 40), vx: 0, vy: -10, t: 0, life: .35, col: '#3a2850', size: 6, ghost: 1 });
-        let nx = m.x + Math.cos(a) * (m.r + 20), ny = m.y + Math.sin(a) * (m.r + 20); if (solidAt(nx, ny)) { nx = m.x - Math.cos(a) * (m.r + 20); ny = m.y - Math.sin(a) * (m.r + 20); } if (!solidAt(nx, ny)) { P.x = nx; P.y = ny; }
+        for (const [da, dd] of [[0, 20], [Math.PI, 20], [Math.PI / 2, 20], [-Math.PI / 2, 20], [Math.PI / 4, 24], [-Math.PI / 4, 24], [Math.PI * .75, 24], [-Math.PI * .75, 24], [0, 40], [Math.PI, 40]]) { const nx = m.x + Math.cos(a + da) * (m.r + dd), ny = m.y + Math.sin(a + da) * (m.r + dd); if (walkTo(nx, ny)) { P.x = nx; P.y = ny; break; } } // 등 뒤 → 앞 → 옆 순서로, 몸이 들어가고 걸어서 닿는 자리만
         P.face = Math.atan2(m.y - P.y, m.x - P.x); P.atkA = .3; P.atkDur = .25;
         const c0 = S.crit, k0 = SFXK; S.crit = 1000; SFXK = 'blade'; damageMob(m, o.dmg, true, false, .6); S.crit = c0; SFXK = k0;
         THFO.push({ k: 'slash', x: m.x, y: m.y - 16, a: P.face + Math.PI, t: 0, life: .24 }); SFX.blink(); shake = Math.max(shake, 3);
@@ -4127,6 +4143,7 @@ function updatePlayer(dt) {
   moveVec = { x: mx, y: my };
   P.atkT -= dt; P.whirlCD -= dt; P.dashCD -= dt; P.potCD -= dt; P.inv -= dt; P.hurtT -= dt; P.swing -= dt; P.whirlT -= dt; P.haste -= dt;
   if (P.atkA != null) { P.atkA += dt / P.atkDur; if (P.atkA >= 1) P.atkA = null; }
+  if (!P.dead && blocked(P, P.x, P.y)) { P.stuckT = (P.stuckT || 0) + dt; if (P.stuckT > .3) { unstick(); P.stuckT = 0; } } else P.stuckT = 0;
   if (P.dash) {
     const st = Math.min(dt, P.dash.t);
     const n = 4;
@@ -5444,7 +5461,7 @@ function renderPanel0() {
         <div class="sr"><span>배경음악</span><button class="btn" data-act="bgmT">${BGM.on ? '켜짐' : '꺼짐'}</button><input type="range" min="0" max="1" step="0.05" value="${BGM.vol}" data-act2="bgmV" aria-label="배경음악 음량"></div>
         <div class="lbl">게임</div><button class="btn" data-act="quitGame">저장하고 나가기</button><div class="note">진행 상황을 저장하고 첫 화면(계정 선택)으로 돌아가요.</div></div>`;
     } else if (tab === 'skl') {
-      const ids = Object.keys(SKILLS).filter(id => skAllowed(id) || (P.sk && P.sk[id])).sort((a, b) => ((P.sk[b] || 0) - (P.sk[a] || 0)) || ((SKILLS[b].cls ? 1 : 0) - (SKILLS[a].cls ? 1 : 0)) || ((SKILLS[a].type === '패시브') - (SKILLS[b].type === '패시브')));
+      const ids = Object.keys(SKILLS).filter(id => skAllowed(id) || (P.sk && P.sk[id])).sort((a, b) => ((SKILLS[b].cls ? 1 : 0) - (SKILLS[a].cls ? 1 : 0)) || ((SKILLS[a].type === '패시브') - (SKILLS[b].type === '패시브'))); // 고정 순서: 직업 기술 → 액티브 → 패시브 (찍은 레벨과 무관)
       body = `<div class="spt">남은 기술 포인트 <b>${P.spts || 0}</b><small>레벨이 오를 때마다 포인트 1을 받아요. 원하는 기술의 + 를 눌러 배우고 올리세요. − 를 누르면 포인트를 돌려받아요</small></div>${P.tutSkShow ? `<div class="tut"><b>🎓 기술 배우기</b><p>레벨이 오르면 <b>기술 포인트</b>를 1씩 받아요. 아래 목록에서 마음에 드는 기술의 <b>+</b> 를 누르면 바로 배워요.</p><p>같은 기술을 계속 올리면 강해지고, <b>Lv 6에 각성</b>해서 새 효과가 붙어요. 마음이 바뀌면 <b>−</b> 로 언제든 되돌릴 수 있어요.</p><button class="btn pri" data-act="tutOk">알겠어요</button></div>` : ''}` + (ids.length ? `<div class="sll">${ids.map(id => { const l = P.sk[id] || 0, aw = l >= SK_AW, K = SKILLS[id], A = AWAKEN[id]; return `<div class="slr${aw ? ' aw' : ''}"><div class="ski">${skIcon(K)}</div><div class="skt"><div class="skh"><b>${aw && A ? A.name : K.name}</b><span>${K.type}${aw ? ' · 각성' : ''}</span><em>${l ? 'Lv ' + l : '미습득'}</em><span class="spb"><button class="btn x" data-act="skdn" data-id="${id}" ${l ? '' : 'disabled'}>−</button><button class="btn x pri" data-act="skup" data-id="${id}" ${(P.spts || 0) > 0 && l < SK_MAX ? '' : 'disabled'}>+</button></span></div><div class="pips">${Array.from({ length: SK_MAX }, (_, k) => `<i class="${k < l ? 'on' : ''}${k >= SK_AW - 1 ? ' a' : ''}"></i>`).join('')}</div><small>${l ? '' : '<b style="color:#9fd8ff">배우면 → </b>'}${K.desc(Math.max(1, l))}</small>${aw && A ? `<small class="awd">각성 · ${A.desc}</small>` : l < SK_AW ? `<small class="nx">Lv ${SK_AW}에 각성: ${A ? A.name : ''}</small>` : ''}</div></div>`; }).join('')}</div>` : '<div class="note">배울 수 있는 기술이 없어요</div>');
     } else body = skinList() || '<div class="note">이 직업은 아직 외형이 없어요</div>';
     w.innerHTML = `<header class="ih"><div class="ih-t"><h2>${CLS().name}</h2><span>Lv ${P.lv} · 전투력 <b>${fmt(combatPower())}</b></span></div><div class="tbs">${tabs}</div><button class="btn x" data-act="close" aria-label="닫기">✕</button></header><div class="ibody">${body}${tip}</div>`;
