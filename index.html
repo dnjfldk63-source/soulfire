@@ -39,7 +39,7 @@ body{background:var(--ink);color:var(--text);font-family:var(--f-body);overflow:
 #chatBtn{position:absolute;left:-44px;top:44px;width:36px;height:36px;border-radius:50%;border:1px solid #3a6a8a;background:radial-gradient(circle at 50% 35%,#14222c,#06090c);color:#bfe3ff;font-size:16px;line-height:1;cursor:pointer;pointer-events:auto;box-shadow:0 2px 8px rgba(0,0,0,.6)}
 #chatBtn i{position:absolute;right:-4px;bottom:-4px;min-width:16px;padding:1px 3px;border-radius:8px;background:#1f8a4a;color:#fff;font:700 10px var(--f-ui);font-style:normal}#chatBtn i:empty{display:none}
 #chatBar{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 96px);transform:translateX(-50%);z-index:60;display:flex;gap:6px;width:min(520px,calc(100% - 24px));padding:6px;border:1px solid #3a6a8a;border-radius:10px;background:rgba(6,10,14,.92);box-shadow:0 6px 24px rgba(0,0,0,.6)}
-#chatBar[hidden]{display:none}#chatIn{flex:1;min-width:0;padding:8px 10px;border:1px solid #2a4458;border-radius:7px;background:#0b141b;color:#e8f4ff;font:14px var(--f-ui)}#chatBar .btn{padding:6px 12px}
+#chatBar[hidden]{display:none}#chatIn{flex:1;min-width:0;padding:8px 10px;border:1px solid #2a4458;border-radius:7px;background:#0b141b;color:#e8f4ff;font:16px var(--f-ui)}#chatBar .btn{padding:6px 12px}
 #setBtn{position:absolute;left:-44px;top:0;width:36px;height:36px;border-radius:50%;border:1px solid #8a6238;background:radial-gradient(circle at 50% 35%,#2c1d14,#0d0806);color:#ffd58a;font-size:19px;line-height:1;cursor:pointer;pointer-events:auto;box-shadow:0 2px 8px rgba(0,0,0,.6)}#setBtn:hover{border-color:#d6903a}
 #mini{display:block;width:150px;height:150px;image-rendering:pixelated}
 
@@ -2769,7 +2769,10 @@ function drawRemotes() {
   }
 }
 { const bar = () => $('#chatBar'), inp = () => $('#chatIn');
-  const open = () => { bar().hidden = false; setTimeout(() => inp().focus(), 0); }, close = () => { bar().hidden = true; inp().blur(); };
+  const vp = document.querySelector('meta[name=viewport]'), vp0 = vp ? vp.content : '';
+  const unzoom = () => { if (!vp) return; vp.content = vp0 + ', maximum-scale=1'; setTimeout(() => { vp.content = vp0; }, 400); };
+  const open = () => { bar().hidden = false; setTimeout(() => inp().focus(), 0); }, close = () => { bar().hidden = true; inp().blur(); unzoom(); };
+  inp().addEventListener('blur', unzoom);
   const sendIt = () => { netChat(inp().value); inp().value = ''; close(); };
   $('#chatBtn').addEventListener('click', e => { e.stopPropagation(); if (bar().hidden) open(); else close(); });
   for (const ev of ['pointerdown', 'touchstart', 'mousedown']) { $('#chatBtn').addEventListener(ev, e => e.stopPropagation(), { passive: true }); $('#chatBar').addEventListener(ev, e => e.stopPropagation(), { passive: true }); }
