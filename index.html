@@ -963,7 +963,7 @@ const MOB = {
     seq: ['charge', 'leap', 'nova', 'charge', 'field', 'leap', 'summon'], adds: ['ghoul', 'wolf'], fcol: '150,10,10', mcol: '#ff4a2a' },
   isbela: { boss: 1, raid: 1, name: '서리 여왕 이스벨라', hp: 2340000, atk: 2640, def: 35, spd: 85, r: 32, col: '#9fe8ff', shape: 'imp', xp: 12000, lv: 30, ab: 'raid', skinCh: .4,
     seq: ['meteor', 'ring', 'field', 'meteor', 'leap', 'summon', 'nova'], adds: ['wraith', 'skel'], fcol: '120,210,255', mcol: '#9fe8ff' },
-  abyss: { boss: 1, final: 1, raid: 1, name: '심연의 군주 벨가로스', hp: 3780000, atk: 3630, def: 45, spd: 82, r: 44, col: '#ff5a1f', shape: 'imp', xp: 20000, lv: 40, ab: 'raid', skinCh: 1,
+  abyss: { boss: 1, final: 1, raid: 1, name: '재의 선봉장 그라무르', hp: 3780000, atk: 3630, def: 45, spd: 82, r: 44, col: '#ff5a1f', shape: 'imp', xp: 20000, lv: 40, ab: 'raid', skinCh: 1,
     seq: ['meteor', 'charge', 'summon', 'leap', 'ring', 'field', 'meteor', 'nova'], adds: ['skel', 'ghoul', 'bat', 'wraith', 'imp'], fcol: '255,90,20', mcol: '#ff7a2a' },
 };
 
@@ -1076,8 +1076,8 @@ const SETS = {
   frost: { name: '서리 여왕의 의복', raid: 'isbela', col: '#8fdcff',
     names: { weapon: '서리 왕홀 단검', helm: '얼음 왕관', armor: '서리 비단 로브', boots: '눈보라 장화', ring: '빙결의 반지', amulet: '겨울 심장 목걸이' },
     b3: '생명력 +20%, 방어력 +25', b6: '받는 피해 -20%, 맞으면 25% 확률로 주변 적 빙결', cls6: { mik: '엔지니어: 화염 방사기가 아이스 방사기로 (피해 +30%, 빙결)', chae: '씨프: 그림자 걸음 연타 +3회, 기술 피해 +15%' } },
-  abyss: { name: '심연 군주의 권능', raid: 'abyss', col: '#c86aff',
-    names: { weapon: '심연의 송곳니', helm: '군주의 뿔관', armor: '심연 흑요갑', boots: '재의 발걸음', ring: '심연의 인장', amulet: '벨가로스의 심장' },
+  abyss: { name: '선봉장의 권능', raid: 'abyss', col: '#c86aff',
+    names: { weapon: '심연의 송곳니', helm: '선봉장의 뿔관', armor: '심연 흑요갑', boots: '재의 발걸음', ring: '심연의 인장', amulet: '그라무르의 심장' },
     b3: '치명타 확률 +10%, 치명타 피해 +40%', b6: '공격력 +25%, 치명타 시 12% 확률로 메테오 낙하', cls6: { mik: '엔지니어: 지뢰가 블랙홀로 (빨아들인 뒤 대폭발)', chae: '씨프: 부채 단검을 두 번 던져요' } },
 };
 const SET_LOOK = { blood: { rgb: '255,90,74', f: 'hue-rotate(-25deg) saturate(1.7)' }, frost: { rgb: '120,210,255', f: 'hue-rotate(180deg) saturate(1.3)' }, abyss: { rgb: '190,100,255', f: 'hue-rotate(250deg) saturate(1.5)' } };
@@ -1368,7 +1368,7 @@ function spawnSwarm(z) {
 const RAIDS = [
   { boss: 'gorvak', tex: 'ash', tint: 'rgba(140,20,10,.28)', set: 'blood', setCh: .45, q: 1.6, name: '피의 투기장', cp: 30000, enr: 120, ilv: 50, items: 3, minR: 1, g: ['#3a2422', '#41292a', '#35201f'], rd: '#5a2a26', desc: '돌진과 도약 내려찍기, 피 웅덩이를 조심하세요' },
   { boss: 'isbela', tex: 'town', tint: 'rgba(60,120,190,.3)', set: 'frost', setCh: .4, q: 2.2, name: '서리 첨탑', cp: 60000, enr: 150, ilv: 50, items: 4, minR: 2, g: ['#25313d', '#2a3744', '#222c37'], rd: '#3a4a5a', desc: '하늘에서 얼음 혜성이 쏟아지고, 얼음 장판이 깔려요' },
-  { boss: 'abyss', tex: 'ash', tint: 'rgba(120,40,0,.18)', set: 'abyss', setCh: .35, q: 2.9, name: '심연의 왕좌', cp: 90000, enr: 180, ilv: 50, items: 5, minR: 2, g: ['#45302f', '#4a3433', '#402b2a'], rd: '#5a3a36', desc: '최종보스. 메테오·돌진·내려찍기·소환을 모두 씁니다' },
+  { boss: 'abyss', tex: 'ash', tint: 'rgba(120,40,0,.18)', set: 'abyss', setCh: .35, q: 2.9, name: '재의 군영', cp: 90000, enr: 180, ilv: 50, items: 5, minR: 2, g: ['#45302f', '#4a3433', '#402b2a'], rd: '#5a3a36', desc: '재의 밤에 은종 마을을 불태운 벨가로스의 선봉장. 메테오·돌진·내려찍기·소환을 모두 씁니다' },
   { boss: 'ashwarden', story: 1, tex: 'crypt2', tint: 'rgba(120,30,10,.22)', set: 'abyss', setCh: .5, q: 3.4, name: '종탑 꼭대기', cp: 150000, enr: 210, ilv: 60, items: 5, minR: 3, g: ['#2e2224', '#322628', '#2a1e20'], rd: '#3a2a2a', desc: '스토리 최종전' },
 ];
 let RAID = null, hz = [], WORLD_SAVE = null;
@@ -1556,7 +1556,7 @@ function raidAbility(e, dt, dx, dy, dd) {
   if (rage && !e.raged) { e.raged = 1; e.spd *= 1.15; shake = 12; SFX.bossRage(e.type); showBanner(D.name + ' 분노!', '패턴이 빨라지고 더 강해집니다', 2); bossSummon(e, 4, D.adds, e.lv - 4); }
   if (D.final && ((!e.asc1 && e.hp < e.maxHp * .6) || (!e.asc2 && e.hp < e.maxHp * .25))) {
     if (!e.asc1) e.asc1 = 1; else e.asc2 = 1;
-    e.air = 1; e.asc = { t: 6, m: .6 }; SFX.bossRage(e.type); showBanner('심연 개방!', '군주가 하늘로 올라 메테오를 쏟아붓습니다', 2.4); bossSummon(e, 6, D.adds, e.lv - 4); burst(e.x, e.y, '#ff6a2a', 30, 260, .8, 4); return true;
+    e.air = 1; e.asc = { t: 6, m: .6 }; SFX.bossRage(e.type); showBanner('심연 개방!', '하늘로 솟아올라 메테오를 쏟아붓습니다', 2.4); bossSummon(e, 6, D.adds, e.lv - 4); burst(e.x, e.y, '#ff6a2a', 30, 260, .8, 4); return true;
   }
   e.ab -= dt;
   if (e.ab <= 0) {
@@ -2055,7 +2055,7 @@ const PROLOGUE = ['열두 해 전, 이 마을은 「은종 마을」이라 불�
 function showPrologue() { P.prologue = 1; openDialog(PROLOGUE, [{ label: '시작하기', fn: () => { closeDialog(); save(); } }], { name: '이야기', img: '' }); }
 function questTalk(from) {
   from = from || 'quest'; const q = qState(), Q = QUESTS[q.i];
-  if (!Q) return openDialog(P.ending ? ['종은 매일 저녁 내가 친다. 그 영감 몫까지.', '재는 그쳤지만, 심연의 왕좌엔 아직 벨가로스의 찌꺼기가 남아 있다. 카론에게 가면 길을 열어 줄 거다.', '…고맙다, 모험가. 이 마을의 진짜 파수꾼은 너다.'] : ['…'], null);
+  if (!Q) return openDialog(P.ending ? ['종은 매일 저녁 내가 친다. 그 영감 몫까지.', '재는 그쳤지만, 재의 밤에 군대를 이끈 선봉장 그라무르가 아직 남쪽 군영에 버티고 있다. 카론에게 가면 길을 열어 줄 거다.', '…고맙다, 모험가. 이 마을의 진짜 파수꾼은 너다.'] : ['…'], null);
   if (from !== giverOf(Q)) return openDialog(from === 'quest' ? (giverOf(Q) === 'garet_n' ? ['가렛 녀석이 침묵의 수도원에서 자네를 기다린다더군.', '북쪽 이정표에서 「침묵의 수도원 입구」로 가 보게.'] : ['…모르가 할멈이 자네를 찾더군. 묘역으로 가 보게.', '(베른하르트가 자네의 시선을 피한다)']) : [giverName(Q) + '에게 가 봐.']);
   const who = giverWho(Q), N = QN(), goal = N === 1 ? QNAMES[Q.mob] + ' 처치' : QNAMES[Q.mob] + ' ' + N + '마리 처치';
   if (q.st === 'active' && q.n >= N) return openDialog(Q.done, [{ label: '보상 받기', fn: () => { questReward(); closeDialog(); } }], who);
@@ -3507,7 +3507,7 @@ function applyIce(m) {
 }
 const iceMul = () => 1 + (skLv('iceSword') ? pickL(SKILLS.iceSword.dm, skLv('iceSword')) : 0);
 function kill(e) {
-  e.hp = 0; addCorpse(e); SFX.kill(e.boss); if (e.d && e.d.raid) SFX.bossDie(e.type);
+  e.hp = 0; addCorpse(e); SFX.kill(e.boss); if (e.d && e.d.raid) SFX.bossDie(e.type); if (e.type === 'abyss') { addText(e.x, e.y - e.r - 46, '주인께서… 남쪽에서… 기다린다…', '#ff9a7a', 16); log('그라무르: 「주인께서… 남쪽에서… 기다린다…」', '#ff9a7a'); }
   const d = e.d;
   let xp = e.summoner ? 0 : d.xp * (e.boss ? 1 : (1 + .25 * (e.lv - 1))) * (e.elite ? 3 : 1);
   if (!e.boss && e.lv < P.lv - 6) xp *= .25;
@@ -3525,8 +3525,8 @@ function kill(e) {
     if (d.final) {
       for (let q = 0; q < 4; q++) dropLoot(e.x, e.y, 'item', makeItem(e.lv + 4, .5, 3));
       for (const m of mobs) if (m.summoner === e && m.hp > 0) { m.hp = 0; burst(m.x, m.y, '#ff8a3a', 10, 160, .5, 3); }
-      $('#banner b').textContent = '심연의 군주 처치!'; $('#banner small').textContent = '전설 장비가 쏟아졌습니다 · 5분 뒤 다시 깨어납니다'; $('#banner').style.opacity = 1; bannerT = 5;
-      log('최종보스 심연의 군주를 쓰러뜨렸습니다!', '#ffd76a');
+      $('#banner b').textContent = d.name + ' 처치!'; $('#banner small').textContent = '전설 장비가 쏟아졌습니다 · 5분 뒤 다시 깨어납니다'; $('#banner').style.opacity = 1; bannerT = 5;
+      log('최종보스 ' + d.name + '을(를) 쓰러뜨렸습니다!', '#ffd76a');
     } else log(`${d.name} 처치! 보스는 2분 뒤 다시 나타납니다`, '#ffb469');
     shake = 10;
   } else if (!e.summoner) {
