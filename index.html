@@ -1331,13 +1331,14 @@ function spawnMob(type, x, y, lv, elite = false) {
   e.hp = e.maxHp; mobs.push(e); return e;
 }
 function spawnTick() {
-  if (RAID || HOUSE) return;
+  if (RAID || HOUSE || netMirror()) return;
+  const C = netSpawnCenter();
   let near = 0;
-  for (const m of mobs) if (!m.boss && Math.abs(m.x - P.x) < 1100 && Math.abs(m.y - P.y) < 1100) near++;
+  for (const m of mobs) if (!m.boss && Math.abs(m.x - C.x) < 1100 && Math.abs(m.y - C.y) < 1100) near++;
   if (near >= 84) return;
   for (let tries = 0; tries < 14; tries++) {
     const a = Math.random() * Math.PI * 2, dd = rand(360, 720);
-    const x = P.x + Math.cos(a) * dd, y = P.y + Math.sin(a) * dd, i = tIdx(x, y);
+    const x = C.x + Math.cos(a) * dd, y = C.y + Math.sin(a) * dd, i = tIdx(x, y);
     if (i < 0 || tile[i] === T_WALL || tile[i] === T_LIQ) continue;
     const z = zoneOf[i]; if (z === 0 || !ZONES[z].mobs.length) continue;
     if (CUR === 'main' && Math.hypot(x - tc(CX), y - tc(CY)) < TS * 24) continue;
@@ -1352,7 +1353,7 @@ function spawnTick() {
   }
 }
 function lairTick() {
-  if (RAID || HOUSE) return;
+  if (RAID || HOUSE || netMirror()) return;
   LAIRS.forEach((L, k) => {
     const st = lairState[k];
     if ((L.map || 'main') !== CUR) return;
@@ -1365,7 +1366,7 @@ function lairTick() {
 // ───────── 무리 습격: 일정 시간마다 사방에서 몬스터 떼가 몰려옴, 다 잡으면 보물상자 ─────────
 let swarmT = 100, swarmWarn = 0, swarmOn = null;
 function swarmTick(dt) {
-  if (!started || P.dead) return;
+  if (!started || P.dead || netMirror()) return;
   const z = zoneAt(P.x, P.y);
   if (swarmOn) {
     const left = mobs.filter(m => m.swarm === swarmOn.id && m.hp > 0).length;
@@ -2715,7 +2716,66 @@ function critTick(dt) {
 // ───────── 멀티: 다른 플레이어 표시 · 채팅 (Render 서버) ─────────
 const NET_URL = /[?&]net=local/.test(location.search) ? 'ws://localhost:10000/ws' : 'wss://soulfire-server.onrender.com/ws';
 const NET_OK = /github\.io$|^localhost$|^127\.0\.0\.1$/.test(location.hostname); // 아티팩트 등 다른 곳에서는 혼자 플레이
-const NET = { ws: null, id: 0, on: false, others: new Map(), sendT: 0, last: '', st: '', retry: 3000, pingT: 0, timer: 0 };
+const NET = { ws: null, id: 0, on: false, others: new Map(), sendT: 0, last: '', st: '', retry: 3000, pingT: 0, timer: 0, owner: 0, mem: [], own: true, grouped: false, mm: new Map(), mseq: 0, mobT: 0 };
+// ── 같이 몹 잡기 ──
+//  무리(서로 약 50칸 안)마다 서버가 담당자 1명을 정함. 담당자는 평소처럼 몹을 계산해 0.12초마다 나눠 주고,
+//  나머지는 그 몹을 따라 그림(mirror). 나머지가 때린 피해는 담당자에게 가고, 처치되면 때린 사람 모두 각자 보상.
+const netMirror = () => NET.on && NET.grouped && !NET.own && !RAID && !HOUSE;
+const netNid = () => NET.id * 1e6 + (++NET.mseq);
+function netTargets() { const out = []; for (const id of NET.mem) { const o = NET.others.get(id); if (o && o.map === CUR && !o.inst && !o.dead) { o.r = 14; o.isRemote = 1; out.push(o); } } return out; }
+function netNear(x, y, R) { if (Math.hypot(x - P.x, y - P.y) < R) return true; if (NET.own && NET.grouped) for (const o of netTargets()) if (Math.hypot(x - o.x, y - o.y) < R) return true; return false; }
+function netSpawnCenter() { if (!(NET.own && NET.grouped)) return P; const L = [P, ...netTargets()]; return L[Math.floor(Math.random() * L.length)]; }
+function netHurt(T, v, src) { netSend({ t: 'hurt', to: T.id, v: Math.round(v), n: src && src.nid }); if (T.id) { const o = NET.others.get(T.id); if (o) o.hurtT = .15; } }
+function netGroup(o, mem) {
+  const was = NET.grouped && !NET.own;
+  NET.owner = o; NET.mem = mem; NET.grouped = mem.length > 0; NET.own = o === NET.id;
+  const now = NET.grouped && !NET.own;
+  if (now && !was) { mobs = mobs.filter(m => m.mirror); shots = []; for (const st of lairState) st.mob = null; swarmOn = null; swarmWarn = 0; NET.mm.clear(); log('근처 플레이어와 같은 몹을 함께 상대해요', '#7fd8ff'); }
+  else if (!now && was) { for (const m of mobs) if (m.mirror) { m.mirror = 0; m.sx = m.x; m.sy = m.y; m.state = 'chase'; m.nid = netNid(); } NET.mm.clear(); LAIRS.forEach((L, k) => { const b = mobs.find(m => m.type === L.boss && m.hp > 0); lairState[k].mob = b || null; }); }
+  if (NET.grouped && NET.own && !was) log('근처 플레이어와 같은 몹을 함께 상대해요 (내가 몹 계산을 맡아요)', '#7fd8ff');
+}
+function netMobsOut() {
+  const L = [], T = netTargets(); if (!T.length) return;
+  for (const e of mobs) {
+    if (e.hp <= 0 || e.d.inert) continue;
+    let near = false; for (const o of T) if (Math.abs(o.x - e.x) < 1300 && Math.abs(o.y - e.y) < 1000) { near = true; break; } if (!near) continue;
+    if (!e.nid) e.nid = netNid();
+    L.push([e.nid, e.type, e.lv, Math.round(e.x), Math.round(e.y), Math.round(e.hp), Math.round(e.maxHp), Math.round((e.face || 0) * 10), (e.elite ? 1 : 0) | (e.frz > 0 ? 2 : 0) | (e.hit > 0 ? 4 : 0) | (e.lunge > 0 ? 8 : 0) | (e.air ? 16 : 0)]);
+    if (L.length >= 150) break;
+  }
+  netSend({ t: 'mobs', L });
+}
+function netMobs(L) {
+  if (!netMirror()) return;
+  const seen = new Set();
+  for (const [nid, type, lv, x, y, hp, maxHp, f, fl] of L) {
+    if (!MOB[type]) continue; seen.add(nid);
+    let e = NET.mm.get(nid);
+    if (!e || e.hp <= 0) { e = spawnMob(type, x, y, lv, !!(fl & 1)); e.mirror = 1; e.nid = nid; e.state = 'chase'; NET.mm.set(nid, e); }
+    e.tx = x; e.ty = y; if (Math.hypot(x - e.x, y - e.y) > 400) { e.x = x; e.y = y; }
+    e.maxHp = maxHp; e.hp = (e.myHit && GT - e.myHit < .5) ? Math.max(1, Math.min(e.hp, hp)) : hp;
+    e.face = f / 10; e.frz = fl & 2 ? .2 : 0; if (fl & 4) e.hit = Math.max(e.hit, .1); if (fl & 8) e.lunge = .12; e.air = fl & 16 ? 1 : null;
+  }
+  for (const [nid, e] of NET.mm) if (!seen.has(nid)) { e.hp = 0; NET.mm.delete(nid); }
+}
+function mirrorStep(e, dt) { e.anim += dt; e.hit -= dt; if (e.lunge) e.lunge -= dt; if (e.tx == null) return; const k = Math.min(1, dt * 12); e.x += (e.tx - e.x) * k; e.y += (e.ty - e.y) * k; }
+function netDmgIn(m) {
+  if (!NET.own) return; const e = mobs.find(x => x.nid === m.n && x.hp > 0); if (!e || e.air) return;
+  e.hp -= m.v; e.hit = .12; e.hitBy = e.hitBy || {}; e.hitBy[m.from] = GT; if (e.state !== 'return') e.state = 'chase';
+  if (m.kb && !e.boss) { const dx = e.x - m.x, dy = e.y - m.y, dl = Math.hypot(dx, dy) || 1, k = 230 * (e.elite ? .5 : 1) * Math.min(1, 15 / e.r) * (m.c ? 1.5 : 1); e.kbx = (e.kbx || 0) + dx / dl * k; e.kby = (e.kby || 0) + dy / dl * k; }
+  if (Math.abs(e.x - P.x) < 700 && Math.abs(e.y - P.y) < 500) addText(e.x + rand(-6, 6), e.y - e.r - 8, String(Math.round(m.v)), m.c ? '#7fd8ff' : '#bfe6ff', m.c ? 20 : 13);
+  if (e.hp <= 0) { if (e.myHit && GT - e.myHit < 20) kill(e); else netKillQuiet(e); }
+}
+function netKill(e) { const by = Object.entries(e.hitBy || {}).filter(([, t]) => GT - t < 20).map(([id]) => +id); netSend({ t: 'kill', n: e.nid, by }); }
+function netKillQuiet(e) {
+  if (NET.own && NET.grouped && e.nid) netKill(e);
+  e.hp = 0; addCorpse(e); SFX.kill(e.boss); burst(e.x, e.y, e.d.col, e.boss ? 60 : 16, e.boss ? 320 : 170, e.boss ? 1 : .6, e.boss ? 5 : 3.5);
+  const k = lairState.findIndex(s0 => s0.mob === e); if (k >= 0) lairState[k].next = GT + (e.d.final ? 300 : 120);
+}
+function netKillIn(m) {
+  const e = NET.mm.get(m.n); if (!e || e.hp <= 0) return; NET.mm.delete(m.n);
+  if ((m.by || []).includes(NET.id) && e.myHit && GT - e.myHit < 20) { e.mirror = 0; kill(e); } else netKillQuiet(e);
+}
 const netMe = () => ({ name: ACCT || '모험가', cls: P.cls || 'mun', skin: (curSkin() && SPR[P.skin]) ? P.skin : '', lv: P.lv, map: CUR, x: Math.round(P.x), y: Math.round(P.y) });
 function netSend(o) { if (NET.ws && NET.ws.readyState === 1) NET.ws.send(JSON.stringify(o)); }
 function netConnect() {
@@ -2734,7 +2794,13 @@ function netOn(m) {
   else if (m.t === 'leave') { const o = NET.others.get(m.id); if (o) log(`${o.name} 님이 나갔어요`, '#8aa0b0'); NET.others.delete(m.id); }
   else if (m.t === 'st') netAdd(m.p);
   if (m.t !== 'pos' && panel === 'inv' && P._invTab === 'who') renderPanel();
-  else if (m.t === 'pos') for (const [id, x, y, f, mv, vd, inst, map] of m.L) { const o = NET.others.get(id); if (!o) continue; if (o.map !== map || Math.hypot(x - o.x, y - o.y) > 900) { o.x = x; o.y = y; } o.tx = x; o.ty = y; o.face = f; o.mv = mv; o.vd = vd; o.inst = inst; o.map = map; }
+  else if (m.t === 'pos') for (const [id, x, y, f, mv, vd, inst, map, dead] of m.L) { const o = NET.others.get(id); if (!o) continue; o.dead = dead; if (o.map !== map || Math.hypot(x - o.x, y - o.y) > 900) { o.x = x; o.y = y; } o.tx = x; o.ty = y; o.face = f; o.mv = mv; o.vd = vd; o.inst = inst; o.map = map; }
+  else if (m.t === 'own') netGroup(m.o, m.mem || []);
+  else if (m.t === 'mobs') netMobs(m.L || []);
+  else if (m.t === 'dmg') netDmgIn(m);
+  else if (m.t === 'hurt') { if (!P.dead) hurtPlayer(m.v, NET.mm.get(m.n) || null); }
+  else if (m.t === 'kill') netKillIn(m);
+  else if (m.t === 'fx' && m.k === 'shot' && netMirror()) { const [x, y, vx, vy, life, size, col] = m.a; shots.push({ x, y, vx, vy, life: life / 100, size, col, dmg: 0, vis: 1 }); }
   else if (m.t === 'chat') { const o = NET.others.get(m.id); if (o) { o.bub = m.text; o.bubT = 5; } log(`💬 ${m.name}: ${m.text}`, '#bfe3ff'); }
   netUi();
 }
@@ -2748,8 +2814,9 @@ function netTick(dt) {
   if (NET.sendT <= 0) {
     NET.sendT = .1;
     const moving = Math.hypot(moveVec.x, moveVec.y) > .05 || !!P.dash, inst = (RAID || HOUSE) ? 1 : 0;
-    const key = [Math.round(P.x), Math.round(P.y), Math.round((P.face || 0) * 20), moving ? 1 : 0, P.vdir || 'S', CUR, inst].join(',');
-    if (key !== NET.last || NET.pingT <= 0) { NET.last = key; NET.pingT = 20; netSend({ t: 'pos', x: Math.round(P.x), y: Math.round(P.y), f: Math.round((P.face || 0) * 100) / 100, m: moving ? 1 : 0, vd: P.vdir || 'S', map: CUR, i: inst }); }
+    const key = [Math.round(P.x), Math.round(P.y), Math.round((P.face || 0) * 20), moving ? 1 : 0, P.vdir || 'S', CUR, inst, P.dead ? 1 : 0].join(',');
+    if (key !== NET.last || NET.pingT <= 0) { NET.last = key; NET.pingT = 20; netSend({ t: 'pos', x: Math.round(P.x), y: Math.round(P.y), f: Math.round((P.face || 0) * 100) / 100, m: moving ? 1 : 0, vd: P.vdir || 'S', map: CUR, i: inst, d: P.dead ? 1 : 0 }); }
+    if (NET.own && NET.grouped && !RAID && !HOUSE) { NET.mobT -= .1; if (NET.mobT <= 0) { NET.mobT = .12; netMobsOut(); } }
     const me = netMe(), st = [me.cls, me.skin, me.lv, me.map].join(',');
     if (st !== NET.st) { NET.st = st; netSend(Object.assign({ t: 'st' }, me)); }
   }
@@ -3622,8 +3689,8 @@ function damageMob(e, base, canCrit = true, flat = false, kb = flat ? 0 : 1) {
   let dmg = flat ? base : base * (60 / (60 + e.def)) * rand(.9, 1.1), crit = false;
   if (canCrit && Math.random() * 100 < S.crit) { dmg *= 1 + S.critDmg / 100; crit = true; shake = Math.max(shake, 4); if (S.setFx && S.setFx.abyss6 && Math.random() < .12 && GT > (P.metCD || 0)) { P.metCD = GT + .4; setMeteor(e.x, e.y); } }
   dmg = Math.max(1, Math.round(dmg)); { const k = SFXK || CLS_SFX[P.cls] || 'blunt'; if (crit) { SFX.crit(k); const nw = performance.now(); if (nw - HITSTOP_LAST > 150 && SFXK !== 'mute') { HITSTOP = .045; HITSTOP_LAST = nw; } } else SFX.hit(k); } if (DMGLOG) { const key = SFXK === 'poison' ? 'poison' : DSRC || 'basic'; DMGLOG[key] = (DMGLOG[key] || 0) + Math.min(dmg, Math.max(0, e.hp)); } thfPoison(e);
-  if (e.hp <= 0) return; e.hp -= dmg; e.hit = .12;
-  if (kb && !e.boss) { const dx = e.x - P.x, dy = e.y - P.y, dl = Math.hypot(dx, dy) || 1, f = 230 * kb * (e.elite ? .5 : 1) * Math.min(1, 15 / e.r) * (crit ? 1.5 : 1); e.kbx = (e.kbx || 0) + dx / dl * f; e.kby = (e.kby || 0) + dy / dl * f; const kv = Math.hypot(e.kbx, e.kby); if (kv > 460) { e.kbx *= 460 / kv; e.kby *= 460 / kv; } }
+  if (e.hp <= 0) return; e.hp -= dmg; e.hit = .12; e.myHit = GT; if (e.mirror) { netSend({ t: 'dmg', n: e.nid, v: dmg, c: crit ? 1 : 0, kb: kb && !e.boss ? 1 : 0, x: Math.round(P.x), y: Math.round(P.y) }); if (e.hp <= 0) e.hp = 1; }
+  if (kb && !e.boss && !e.mirror) { const dx = e.x - P.x, dy = e.y - P.y, dl = Math.hypot(dx, dy) || 1, f = 230 * kb * (e.elite ? .5 : 1) * Math.min(1, 15 / e.r) * (crit ? 1.5 : 1); e.kbx = (e.kbx || 0) + dx / dl * f; e.kby = (e.kby || 0) + dy / dl * f; const kv = Math.hypot(e.kbx, e.kby); if (kv > 460) { e.kbx *= 460 / kv; e.kby *= 460 / kv; } }
   if (kb && sfx.length < 140) addSfx('spark', e.x + rand(-6, 6), e.y - e.r * .5 + rand(-5, 5), (crit ? 44 : 28) * rand(.85, 1.15), .17, { rot: rand(0, TAU), g0: .5, g1: 1.3 });
   if (e.state !== 'return') e.state = 'chase';
   if (crit) texts.push({ x: e.x + rand(-6, 6), y: e.y - e.r - 12, txt: fmt(dmg), col: '#ff3020', t: 0, size: 30, vx: rand(-10, 10), crit: 1 });
@@ -3643,6 +3710,7 @@ function applyIce(m) {
 }
 const iceMul = () => 1 + (skLv('iceSword') ? pickL(SKILLS.iceSword.dm, skLv('iceSword')) : 0);
 function kill(e) {
+  if (NET.own && NET.grouped && e.nid) netKill(e);
   e.hp = 0; addCorpse(e); SFX.kill(e.boss); if (e.d && e.d.raid) SFX.bossDie(e.type); if (e.type === 'abyss') { addText(e.x, e.y - e.r - 46, '주인께서… 남쪽에서… 기다린다…', '#ff9a7a', 16); log('그라무르: 「주인께서… 남쪽에서… 기다린다…」', '#ff9a7a'); }
   const d = e.d;
   let xp = e.summoner ? 0 : d.xp * (e.boss ? 1 : (1 + .25 * (e.lv - 1))) * (e.elite ? 3 : 1);
@@ -4308,9 +4376,10 @@ function updateMob(e, dt) {
   e.anim += dt; e.cd -= dt;
   let T = P;
   if (allies.length) { let bd = Math.hypot(P.x - e.x, P.y - e.y); for (const a of allies) { const d = Math.hypot(a.x - e.x, a.y - e.y); if (d < bd && d < 260) { bd = d; T = a; } } }
+  if (NET.own && NET.grouped) { let bd = (T === P && (P.dead || zoneAt(P.x, P.y) === 0)) ? 1e9 : Math.hypot(T.x - e.x, T.y - e.y); for (const o of netTargets()) { const d = Math.hypot(o.x - e.x, o.y - e.y); if (d < bd) { bd = d; T = o; } } }
   const dx = T.x - e.x, dy = T.y - e.y, dd = Math.hypot(dx, dy);
   const home = Math.hypot(e.x - e.sx, e.y - e.sy);
-  const playerSafe = T === P && (P.dead || zoneAt(P.x, P.y) === 0);
+  const playerSafe = (T === P && (P.dead || zoneAt(P.x, P.y) === 0)) || (T.isRemote && (T.dead || zoneAt(T.x, T.y) === 0));
   const aggro = e.swarm ? 1200 : e.d.raid ? 9999 : e.boss ? 360 : 300, leash = e.d.raid || e.summoner && e.summoner.d.raid ? 9999 : e.boss ? 520 : 750;
   if (e.state === 'return') {
     const hd = Math.max(1, home);
@@ -4338,9 +4407,10 @@ function updateMob(e, dt) {
   if (rg) {
     // 사거리 안이면 멈춰서 쏘기만(도망 없음), 사거리 밖이면 다가옴
     if (dd > rg.range * (e.inRange ? .95 : .8)) { e.inRange = 0; moveE(e, dx / dd * e.spd * 1.15 * dt, dy / dd * e.spd * 1.15 * dt); } else e.inRange = 1;
-    if (e.cd <= 0 && dd < rg.range && !wallBetween(e, P)) {
+    if (e.cd <= 0 && dd < rg.range && !wallBetween(e, T)) {
       e.cd = rg.cd * rand(.85, 1.15);
       shots.push({ x: e.x, y: e.y, vx: dx / dd * rg.speed, vy: dy / dd * rg.speed, dmg: e.atk, life: rg.range / rg.speed * 1.3, col: rg.col, size: rg.size, src: e });
+      if (NET.own && NET.grouped) netSend({ t: 'fx', k: 'shot', a: [Math.round(e.x), Math.round(e.y), Math.round(dx / dd * rg.speed), Math.round(dy / dd * rg.speed), Math.round(rg.range / rg.speed * 130), rg.size, rg.col] });
     }
   } else {
     const reach = e.r + T.r + 5;
@@ -4352,7 +4422,7 @@ function updateMob(e, dt) {
       if (mvk === 'pounce') { e.pcd = (e.pcd || 0) - dt; if (e.pt > 0) { e.pt -= dt; sp *= 2.8; } else if (dd < 150 && e.pcd <= 0) { e.pt = .22; e.pcd = rand(2.2, 3.2); } }
       moveE(e, (dx / dd + ox) * sp * dt, (dy / dd + oy) * sp * dt);
     }
-    else if (e.cd <= 0) { e.cd = e.boss ? .9 : 1.1; if (T === P) hurtPlayer(e.atk, e); else hurtAlly(T, e.atk); e.lunge = .12; }
+    else if (e.cd <= 0) { e.cd = e.boss ? .9 : 1.1; if (T === P) hurtPlayer(e.atk, e); else if (T.isRemote) netHurt(T, e.atk, e); else hurtAlly(T, e.atk); e.lunge = .12; }
   }
   if (e.lunge) e.lunge -= dt;
 }
@@ -4434,19 +4504,19 @@ function update(dt) {
   updatePlayer(dt);
   skillTick(dt);
   if (toastT > 0) { toastT -= dt; const tb = document.querySelector('#eqToast .t-bar'); if (tb) tb.style.transform = `scaleX(${Math.max(0, toastT / 8)})`; if (toastT <= 0) hideToast(); }
-  for (const e of mobs) if (e.hp > 0) updateMob(e, dt);
+  for (const e of mobs) if (e.hp > 0) { if (e.mirror) mirrorStep(e, dt); else updateMob(e, dt); }
   // 몬스터끼리 겹침 해소
   for (let i = 0; i < mobs.length; i++) for (let j = i + 1; j < mobs.length; j++) {
     const a = mobs[i], b = mobs[j]; const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy), m = a.r + b.r - 4;
-    if (d > 0 && d < m) { const p = (m - d) / 2, ux = dx / d, uy = dy / d; if (!a.boss) moveE(a, -ux * p, -uy * p); if (!b.boss) moveE(b, ux * p, uy * p); }
+    if (d > 0 && d < m) { const p = (m - d) / 2, ux = dx / d, uy = dy / d; if (!a.boss && !a.mirror) moveE(a, -ux * p, -uy * p); if (!b.boss && !b.mirror) moveE(b, ux * p, uy * p); }
   }
-  mobs = mobs.filter(m => m.hp > 0 && (m.boss || Math.hypot(m.x - P.x, m.y - P.y) < 1600));
+  mobs = mobs.filter(m => m.hp > 0 && (m.boss || m.mirror || netNear(m.x, m.y, 1600)));
   for (const s of shots) {
     if (s.orb) { s.orb -= dt; if (s.orb <= 0) { s.life = 0; for (let k = 0; k < 14; k++) { const a = k / 14 * TAU; shots.push({ x: s.x, y: s.y, vx: Math.cos(a) * 240, vy: Math.sin(a) * 240, dmg: s.dmg * .5, life: 1.8, col: s.col, size: 6, src: s.src }); } addSfx('shock', s.x, s.y, 180, .4, { g0: .4, g1: 1.1 }); continue; } }
     s.x += s.vx * dt; s.y += s.vy * dt; s.life -= dt;
     if (wallAt(s.x, s.y)) s.life = 0;
-    else if (Math.hypot(s.x - P.x, s.y - P.y) < P.r + s.size) { s.life = 0; hurtPlayer(s.dmg, s.src); }
-    else for (const a of allies) if (Math.hypot(s.x - a.x, s.y - a.y) < a.r + s.size) { s.life = 0; hurtAlly(a, s.dmg); break; }
+    else if (!s.vis && Math.hypot(s.x - P.x, s.y - P.y) < P.r + s.size) { s.life = 0; hurtPlayer(s.dmg, s.src); }
+    else if (!s.vis) { for (const a of allies) if (Math.hypot(s.x - a.x, s.y - a.y) < a.r + s.size) { s.life = 0; hurtAlly(a, s.dmg); break; } if (s.life > 0 && NET.own && NET.grouped) for (const o of netTargets()) if (Math.hypot(s.x - o.x, s.y - o.y) < 14 + s.size) { s.life = 0; netHurt(o, s.dmg, s.src); break; } }
   }
   shots = shots.filter(s => s.life > 0);
   for (const p of pshots) {
