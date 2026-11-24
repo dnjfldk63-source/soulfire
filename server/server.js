@@ -78,6 +78,8 @@ wss.on('connection', (ws, req) => {
     if (m.t === 'fx' && p.owner === p.id) { const s = JSON.stringify({ t: 'fx', k: clean(m.k, 12), a: Array.isArray(m.a) ? m.a.slice(0, 12) : [] }); for (const id of p.mem) toId(id, s); return; }
     if (m.t === 'kill' && p.owner === p.id) { const s = JSON.stringify({ t: 'kill', n: m.n, by: Array.isArray(m.by) ? m.by.slice(0, 20) : [] }); for (const id of p.mem) toId(id, s); return; }
     if (m.t === 'hurt' && p.owner === p.id && p.mem.includes(m.to)) { toId(m.to, { t: 'hurt', v: num(m.v, 0, 1e9), n: m.n }); return; }
+    // 지원 마법(치유·부활·축복): 같은 무리의 동료에게만
+    if (m.t === 'sup' && p.mem.length) { const k = clean(m.k, 8), o = JSON.stringify({ t: 'sup', from: p.id, k, v: num(m.v, 0, 100), s: num(m.s, 0, 100), d: num(m.d, 0, 60), aw: m.aw ? 1 : 0 }); const to = Array.isArray(m.to) ? m.to.filter(id => p.mem.includes(id)) : p.mem; for (const id of to) toId(id, o); return; }
     if (m.t === 'dmg' && p.owner && p.owner !== p.id) { toId(p.owner, { t: 'dmg', from: p.id, n: m.n, v: num(m.v, 0, 1e9), c: m.c ? 1 : 0, kb: m.kb ? 1 : 0, x: num(m.x, 0, 20000), y: num(m.y, 0, 20000) }); return; }
   });
   ws.on('close', () => { if (players.delete(p.id)) { broadcast({ t: 'leave', id: p.id }, p); regroup(); } });
