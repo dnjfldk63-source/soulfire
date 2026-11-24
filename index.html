@@ -36,6 +36,10 @@ body{background:var(--ink);color:var(--text);font-family:var(--f-body);overflow:
 #pts{font-size:12px;color:var(--good)}
 #cp{font-family:var(--f-ui);font-size:12px;color:#e8b86a;font-variant-numeric:tabular-nums;margin-right:auto}#cp b{color:#ffd58a;font-size:13.5px}
 #miniWrap{right:calc(env(safe-area-inset-right,0px) + 16px);padding:6px;background:var(--panel);border:1px solid var(--line);border-radius:8px}
+#chatBtn{position:absolute;left:-44px;top:44px;width:36px;height:36px;border-radius:50%;border:1px solid #3a6a8a;background:radial-gradient(circle at 50% 35%,#14222c,#06090c);color:#bfe3ff;font-size:16px;line-height:1;cursor:pointer;pointer-events:auto;box-shadow:0 2px 8px rgba(0,0,0,.6)}
+#chatBtn i{position:absolute;right:-4px;bottom:-4px;min-width:16px;padding:1px 3px;border-radius:8px;background:#1f8a4a;color:#fff;font:700 10px var(--f-ui);font-style:normal}#chatBtn i:empty{display:none}
+#chatBar{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 96px);transform:translateX(-50%);z-index:60;display:flex;gap:6px;width:min(520px,calc(100% - 24px));padding:6px;border:1px solid #3a6a8a;border-radius:10px;background:rgba(6,10,14,.92);box-shadow:0 6px 24px rgba(0,0,0,.6)}
+#chatBar[hidden]{display:none}#chatIn{flex:1;min-width:0;padding:8px 10px;border:1px solid #2a4458;border-radius:7px;background:#0b141b;color:#e8f4ff;font:14px var(--f-ui)}#chatBar .btn{padding:6px 12px}
 #setBtn{position:absolute;left:-44px;top:0;width:36px;height:36px;border-radius:50%;border:1px solid #8a6238;background:radial-gradient(circle at 50% 35%,#2c1d14,#0d0806);color:#ffd58a;font-size:19px;line-height:1;cursor:pointer;pointer-events:auto;box-shadow:0 2px 8px rgba(0,0,0,.6)}#setBtn:hover{border-color:#d6903a}
 #mini{display:block;width:150px;height:150px;image-rendering:pixelated}
 
@@ -597,7 +601,8 @@ body.touch #recallBar{bottom:calc(env(safe-area-inset-bottom,0px) + 150px)}
   <div class="row"><span id="gold">0 골드</span><span id="cp"></span><span id="pts"></span></div>
   <div id="skTray"></div>
 </div>
-<div class="hud top" id="miniWrap"><canvas id="mini" width="150" height="150"></canvas><button id="setBtn" title="설정 (소리 · 게임)" aria-label="설정">⚙</button></div>
+<div id="chatBar" hidden><input id="chatIn" maxlength="80" placeholder="메시지 (Enter로 보내기)" autocomplete="off" enterkeyhint="send"><button class="btn pri" id="chatSend">보내기</button></div>
+<div class="hud top" id="miniWrap"><canvas id="mini" width="150" height="150"></canvas><button id="setBtn" title="설정 (소리 · 게임)" aria-label="설정">⚙</button><button id="chatBtn" title="채팅" aria-label="채팅" hidden>💬<i id="onlineN"></i></button></div>
 <div class="hud" id="log"></div>
 <div class="hud" id="eqToast" hidden></div>
 <div class="ov" id="lvlPick" hidden><div class="lp"><div class="eyebrow-latin">Level up</div><h2 class="metal" id="lpTitle">레벨 업</h2><div class="note" id="lpNote">기술 하나를 고르세요 · 같은 기술을 또 고르면 강해져요 (최대 5)</div><div class="lp-cards" id="lpCards"></div></div></div>
@@ -2706,6 +2711,71 @@ function critTick(dt) {
     if (solidAt(nx, ny) || zoneAt(nx, ny) !== 0) { c.mv = 0; continue; } c.x = nx; c.y = ny; c.flip = dx < 0;
   }
 }
+// ───────── 멀티: 다른 플레이어 표시 · 채팅 (Render 서버) ─────────
+const NET_URL = /[?&]net=local/.test(location.search) ? 'ws://localhost:10000/ws' : 'wss://soulfire-server.onrender.com/ws';
+const NET_OK = /github\.io$|^localhost$|^127\.0\.0\.1$/.test(location.hostname); // 아티팩트 등 다른 곳에서는 혼자 플레이
+const NET = { ws: null, id: 0, on: false, others: new Map(), sendT: 0, last: '', st: '', retry: 3000, pingT: 0, timer: 0 };
+const netMe = () => ({ name: ACCT || '모험가', cls: P.cls || 'mun', skin: (curSkin() && SPR[P.skin]) ? P.skin : '', lv: P.lv, map: CUR, x: Math.round(P.x), y: Math.round(P.y) });
+function netSend(o) { if (NET.ws && NET.ws.readyState === 1) NET.ws.send(JSON.stringify(o)); }
+function netConnect() {
+  if (!NET_OK || NET.ws || !started || typeof WebSocket === 'undefined') return;
+  let ws; try { ws = new WebSocket(NET_URL); } catch (e) { return; }
+  NET.ws = ws;
+  ws.onopen = () => { NET.retry = 3000; netSend(Object.assign({ t: 'hello' }, netMe())); };
+  ws.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch (_) { return; } netOn(m); };
+  ws.onclose = () => { const was = NET.on; NET.ws = null; NET.on = false; NET.others.clear(); netUi(); if (was) log('서버 연결이 끊겼어요 · 다시 연결 중…', '#8aa0b0'); clearTimeout(NET.timer); NET.timer = setTimeout(netConnect, NET.retry); NET.retry = Math.min(60000, NET.retry * 2); };
+  ws.onerror = () => {};
+}
+function netAdd(p) { const o = NET.others.get(p.id) || { walk: 0, bub: '', bubT: 0 }; Object.assign(o, { id: p.id, name: p.name, cls: p.cls, skin: p.skin, lv: p.lv, map: p.map, face: p.f || 0, mv: p.m, vd: p.vd || 'S', inst: p.i }); if (o.x == null) { o.x = o.tx = p.x; o.y = o.ty = p.y; } NET.others.set(p.id, o); return o; }
+function netOn(m) {
+  if (m.t === 'welcome') { NET.id = m.id; NET.on = true; NET.others.clear(); for (const p of m.players) netAdd(p); log(`서버에 접속했어요 · 지금 ${NET.others.size + 1}명 접속 중`, '#7fd8ff'); }
+  else if (m.t === 'join') { netAdd(m.p); log(`${m.p.name} 님이 들어왔어요`, '#7fd8ff'); }
+  else if (m.t === 'leave') { const o = NET.others.get(m.id); if (o) log(`${o.name} 님이 나갔어요`, '#8aa0b0'); NET.others.delete(m.id); }
+  else if (m.t === 'st') netAdd(m.p);
+  else if (m.t === 'pos') for (const [id, x, y, f, mv, vd, inst, map] of m.L) { const o = NET.others.get(id); if (!o) continue; if (o.map !== map || Math.hypot(x - o.x, y - o.y) > 900) { o.x = x; o.y = y; } o.tx = x; o.ty = y; o.face = f; o.mv = mv; o.vd = vd; o.inst = inst; o.map = map; }
+  else if (m.t === 'chat') { const o = NET.others.get(m.id); if (o) { o.bub = m.text; o.bubT = 5; } log(`💬 ${m.name}: ${m.text}`, '#bfe3ff'); }
+  netUi();
+}
+function netUi() { const b = $('#chatBtn'); if (!b) return; b.hidden = !NET.on; $('#onlineN').textContent = NET.on ? String(NET.others.size + 1) : ''; if (!NET.on) $('#chatBar').hidden = true; }
+function netTick(dt) {
+  if (!NET_OK) return;
+  if (!NET.ws && started && !NET.timer) netConnect();
+  if (!NET.on) return;
+  for (const o of NET.others.values()) { const k = Math.min(1, dt * 10); o.x += (o.tx - o.x) * k; o.y += (o.ty - o.y) * k; if (o.mv) o.walk += dt * 10; if (o.bubT > 0) o.bubT -= dt; }
+  NET.sendT -= dt; NET.pingT -= dt;
+  if (NET.sendT <= 0) {
+    NET.sendT = .1;
+    const moving = Math.hypot(moveVec.x, moveVec.y) > .05 || !!P.dash, inst = (RAID || HOUSE) ? 1 : 0;
+    const key = [Math.round(P.x), Math.round(P.y), Math.round((P.face || 0) * 20), moving ? 1 : 0, P.vdir || 'S', CUR, inst].join(',');
+    if (key !== NET.last || NET.pingT <= 0) { NET.last = key; NET.pingT = 20; netSend({ t: 'pos', x: Math.round(P.x), y: Math.round(P.y), f: Math.round((P.face || 0) * 100) / 100, m: moving ? 1 : 0, vd: P.vdir || 'S', map: CUR, i: inst }); }
+    const me = netMe(), st = [me.cls, me.skin, me.lv, me.map].join(',');
+    if (st !== NET.st) { NET.st = st; netSend(Object.assign({ t: 'st' }, me)); }
+  }
+}
+function netChat(text) { text = String(text || '').trim().slice(0, 80); if (!text || !NET.on) return; netSend({ t: 'chat', text }); P.bub = text; P.bubT = 5; log(`💬 ${ACCT || '나'}: ${text}`, '#ffe6a8'); }
+function bubble(text, x, y) { ctx.save(); ctx.font = '600 12px ' + (getComputedStyle(document.body).fontFamily || 'sans-serif'); const w = Math.min(220, ctx.measureText(text).width + 16), h = 22; ctx.fillStyle = 'rgba(8,12,18,.88)'; ctx.strokeStyle = 'rgba(160,210,255,.6)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x - w / 2, y - h, w, h, 8) : ctx.rect(x - w / 2, y - h, w, h); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#eef6ff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text.length > 26 ? text.slice(0, 25) + '…' : text, x, y - h / 2); ctx.restore(); }
+function drawRemotes() {
+  if (P.bubT > 0 && !P.dead) DECO.push({ x: P.x, y: P.y + 30, deco: () => bubble(P.bub, P.x, P.y - 96) });
+  if (!NET.on || RAID || HOUSE) return;
+  for (const o of NET.others.values()) {
+    if (o.map !== CUR || o.inst || Math.abs(o.x - P.x) > 900 || Math.abs(o.y - P.y) > 700) continue;
+    DECO.push({ x: o.x, y: o.y + 12, deco: () => {
+      const C = CLASSES[o.cls] || CLASSES.mun, k = (o.skin && SPR[o.skin]) ? o.skin : (SPR[o.cls] || HERO_DRAW[o.cls] ? o.cls : 'mun'), sc = (SPR[o.cls] ? .64 : .52) * (C.scale || 1) * 1.08;
+      ell(o.x, o.y + 12, 18.5 * (C.scale || 1), 6.5, 'rgba(0,0,0,.4)');
+      ctx.save(); ctx.globalAlpha = .96; drawHero(ctx, k, o.x, o.y + 12, sc, GT, { flip: Math.cos(o.face) < 0, flipS: Math.cos(o.face) < 0 ? -1 : 1, turnK: 1, vdir: o.vd, vprev: o.vd, vk: 1, walk: o.walk, moving: !!o.mv, lean: o.mv ? 1 : 0, pick: -1, noShadow: 1, seed: o.id }); ctx.restore();
+      label(`${o.name} · Lv${o.lv}`, o.x, o.y - 84 * (C.scale || 1), '#9fe0ff', 11, 700);
+      if (o.bubT > 0) bubble(o.bub, o.x, o.y - 98 * (C.scale || 1));
+    } });
+  }
+}
+{ const bar = () => $('#chatBar'), inp = () => $('#chatIn');
+  const open = () => { bar().hidden = false; setTimeout(() => inp().focus(), 0); }, close = () => { bar().hidden = true; inp().blur(); };
+  const sendIt = () => { netChat(inp().value); inp().value = ''; close(); };
+  $('#chatBtn').addEventListener('click', e => { e.stopPropagation(); if (bar().hidden) open(); else close(); });
+  for (const ev of ['pointerdown', 'touchstart', 'mousedown']) { $('#chatBtn').addEventListener(ev, e => e.stopPropagation(), { passive: true }); $('#chatBar').addEventListener(ev, e => e.stopPropagation(), { passive: true }); }
+  $('#chatSend').addEventListener('click', e => { e.stopPropagation(); sendIt(); });
+  $('#chatIn').addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') { e.preventDefault(); sendIt(); } else if (e.key === 'Escape') close(); });
+  addEventListener('keydown', e => { if (e.key === 'Enter' && NET.on && started && bar().hidden && !(e.target && e.target.tagName === 'INPUT') && !DLG && !panel && !LOCK && !FISH && !lvlOpen) { e.preventDefault(); open(); } }); }
 function critDraw() {
   if (CUR !== 'main' || RAID || HOUSE) return;
   for (const c of CRIT) { if (Math.abs(c.x - P.x) > 800 || Math.abs(c.y - P.y) > 600) continue; const im = PET_IMG[c.k === 'hen' ? 'cr_hen' : 'cr_cat'];
@@ -4681,7 +4751,7 @@ function drawStructures() {
 function FDISP() { return FDISP.v || (FDISP.v = getComputedStyle(document.body).getPropertyValue('--f-display') || 'serif'); }
 function drawNpcs() {
   if (RAID) { TALK = []; return; }
-  critDraw(); drawWNodes(); if (CUR !== 'main') drawGatherFx();
+  drawRemotes(); critDraw(); drawWNodes(); if (CUR !== 'main') drawGatherFx();
   TALK = [];
   for (const qn of NPCS) { if ((qn.map || 'main') !== CUR) continue; const mm = npcMark(qn); if (mm.mk) DECO.push({ x: tc(qn.tx), y: tc(qn.ty) + 13, deco: () => { const x = tc(qn.tx), y = tc(qn.ty) - 152 + Math.sin(GT * 4) * 4, mk = mm.mk; ctx.save(); ctx.font = '900 30px ' + FDISP(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = .35; circ(x, y, 22, mm.glow); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.lineWidth = 5; ctx.strokeStyle = '#1a1000'; ctx.strokeText(mk, x, y); ctx.fillStyle = mk === '?' ? '#7fffb0' : mm.col; ctx.fillText(mk, x, y); ctx.restore(); } }); }
   for (const n of NPCS) if ((n.map || 'main') === CUR) DECO.push({ x: tc(n.tx), y: tc(n.ty) + 12, deco: () => {
@@ -5310,6 +5380,7 @@ function drawMini() {
       m.font = '900 13px sans-serif'; m.textAlign = 'center'; m.textBaseline = 'middle'; m.lineWidth = 3; m.strokeStyle = '#000'; m.strokeText('!', x, y); m.fillStyle = q.col; m.fillText('!', x, y); } }
   m.fillStyle = '#ff6b5a';
   for (const e of mobs) if (!e.boss && Math.hypot(e.x - P.x, e.y - P.y) < 700) m.fillRect(e.x / TS * k - .75, e.y / TS * k - .75, 1.5, 1.5);
+  if (NET.on && !RAID && !HOUSE) { m.fillStyle = '#5fd8ff'; for (const o of NET.others.values()) if (o.map === CUR && !o.inst) { m.beginPath(); m.arc(o.x / TS * k, o.y / TS * k, 2.2, 0, TAU); m.fill(); } }
   m.fillStyle = '#ffffff'; m.beginPath(); m.arc(P.x / TS * k, P.y / TS * k, 2.6, 0, TAU); m.fill();
 }
 
@@ -6211,7 +6282,7 @@ function frame(now) {
   const dt = Math.max(0, Math.min(.05, (now - last) / 1000)); last = now;
   if (FISH) fishUpdate(dt);
   if (ZV) zvTick(dt);
-  if (HITSTOP > 0) { HITSTOP -= dt; } else if (started && !ZV && !panel && !P.dead && !lvlOpen && !LOCK && !CUT && !DLG && !FISH && !RW && !ENDING && $('#raidRes').hidden) { update(dt); gatherTick(dt); wnodeTick(dt); engTick(dt); thfTick(dt); warpTick(dt); petTick(dt); critTick(dt); autoPortal(); }
+  if (HITSTOP > 0) { HITSTOP -= dt; } else if (started && !ZV && !panel && !P.dead && !lvlOpen && !LOCK && !CUT && !DLG && !FISH && !RW && !ENDING && $('#raidRes').hidden) { update(dt); gatherTick(dt); wnodeTick(dt); engTick(dt); thfTick(dt); warpTick(dt); petTick(dt); critTick(dt); netTick(dt); if (P.bubT > 0) P.bubT -= dt; autoPortal(); }
   else if (!started) { GT += dt; P.walk = 0; }
   if (ZV) { const S0 = SCALE; SCALE = S0 * zvZoom(); draw(); SCALE = S0; } else draw();
   if (started) { window.__bgmT = (window.__bgmT || 0) - dt; if (window.__bgmT <= 0) { window.__bgmT = 1.5; bgmZone(); } }
