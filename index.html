@@ -838,6 +838,7 @@ const TPROPS = [
   ['tp_tree', -12, -3, 112, 1], ['tp_tree', 9, 9, 108, 1], ['tp_tree', 18, -10, 116, 1], ['tp_tree', -12, -17, 112, 1], ['tp_tree', 8, 19, 108, 1], ['tp_tree', 17, 13, 104, 1], ['tp_tree', -16, 13, 100, 1], ['tp_tree', -3, -19, 104, 1],
   ['tp_lamp', 2, -6, 30, 0], ['tp_lamp', -2, 6, 30, 0], ['tp_lamp', 6, 2, 30, 0], ['tp_lamp', -6, -2, 30, 0], ['tp_lamp', 2, -11, 30, 0], ['tp_lamp', -2, 11, 30, 0], ['tp_lamp', 11, -2, 30, 0], ['tp_lamp', -11, 2, 30, 0],
 ];
+let LAMP_GLOW = null;
 const townPath = (x, y) => { const dx = x - CX, dy = y - CY, rr = Math.hypot(dx, dy + .5); return rr < 8.6 || Math.abs(dx) <= 1 || (dy >= -1 && dy <= 0) || Math.abs(rr - 11) < .75; };
 const POND = { tx: CX - 22, ty: CY + 9, rx: 4.6, ry: 3.4 }, DOCK = { tx: CX - 22, ty0: CY + 10, ty1: CY + 13 };
 function stampPond() {
@@ -3014,27 +3015,27 @@ const BGM_SYN = (() => {
 // canyon: 「Evil temple ambiance loop」 · grave: 「Moonlit Lullaby for the Lost」 · snow: 「Snow Theme」 · crypt: 「Dungeon Ambience」
 // house: 「Dark Cavern Ambient」 · raid: Juhani Junkala 「Epic Boss Battle」 — 모두 CC0
 const BGM = (() => {
-  const FILES = { town: 'town', field: 'field', forest: 'forest', ruin: 'ruin', canyon: 'canyon', grave: 'grave', snow: 'snow', crypt: 'crypt', house: 'house', raid: 'raid' };
-  const LV = { town: .8, field: .75, forest: .8, ruin: .75, canyon: .85, grave: .85, snow: .8, crypt: 1, house: 1, raid: .7 };
+  const FILES = { town: 'town', field: 'field', forest: 'field', ruin: 'field', canyon: 'field', grave: 'field', snow: 'snow', crypt: 'field', house: 'field', raid: 'field' };
+  const LV = { town: .8, field: .75, snow: .8 };
   let ac = null, master = null, mood = null, on = BGM_SYN.on, vol = BGM_SYN.vol, cur = null, failed = false; const tr = {};
   function init() { if (ac) return; const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return; ac = new AC(); master = ac.createGain(); master.gain.value = 0; master.connect(ac.destination); }
-  function track(m) {
-    if (tr[m]) return tr[m];
-    const el = new Audio(); el.src = 'music/' + FILES[m] + '.mp3'; el.loop = true; el.preload = 'auto'; el.crossOrigin = 'anonymous';
-    const T = tr[m] = { el, g: null, ok: null };
+  function track(f) {
+    if (tr[f]) return tr[f];
+    const el = new Audio(); el.src = 'music/' + f + '.mp3'; el.loop = true; el.preload = 'auto'; el.crossOrigin = 'anonymous';
+    const T = tr[f] = { el, g: null, ok: null };
     el.addEventListener('canplay', () => { T.ok = true; }, { once: true });
-    el.addEventListener('error', () => { T.ok = false; if (mood === m) useSynth(); }, { once: true });
+    el.addEventListener('error', () => { T.ok = false; if (mood && FILES[mood] === f) useSynth(); }, { once: true });
     try { const src = ac.createMediaElementSource(el); T.g = ac.createGain(); T.g.gain.value = 0; src.connect(T.g); T.g.connect(master); } catch (e) { T.ok = false; }
     return T;
   }
   function useSynth() { if (failed) return; failed = true; for (const k in tr) { try { tr[k].el.pause(); } catch (e) {} } if (on) { if (!BGM_SYN.on) BGM_SYN.toggle(); BGM_SYN.setVol(vol); BGM_SYN.start(); BGM_SYN.mood(mood || 'town'); } }
   function switchTo(m) {
     if (failed) { BGM_SYN.mood(m); return; }
-    const n = ac.currentTime, nx = track(m);
+    const n = ac.currentTime, f = FILES[m], nx = track(f);
     if (nx.ok === false) { useSynth(); return; }
     if (cur && cur !== nx) { const old = cur; old.g.gain.cancelScheduledValues(n); old.g.gain.setTargetAtTime(0, n, .6); setTimeout(() => { if (cur !== old) try { old.el.pause(); } catch (e) {} }, 3500); }
-    cur = nx; nx.g.gain.cancelScheduledValues(n); nx.g.gain.setTargetAtTime(LV[m] || .8, n + .2, .7);
-    if (nx.el.paused) { if (m === 'raid') nx.el.currentTime = 0; const p = nx.el.play(); if (p && p.catch) p.catch(() => {}); }
+    if (cur === nx && !nx.el.paused) return; cur = nx; nx.g.gain.cancelScheduledValues(n); nx.g.gain.setTargetAtTime(LV[f] || .8, n + .2, .7);
+    if (nx.el.paused) { const p = nx.el.play(); if (p && p.catch) p.catch(() => {}); }
   }
   // 합성 음악은 꺼 둔 채로 대기(녹음을 못 불러오면 그때 켬)
   if (BGM_SYN.on) { try { BGM_SYN.toggle(); } catch (e) {} } try { localStorage.setItem('sf-bgm', JSON.stringify({ on, vol })); } catch (e) {}
@@ -3064,7 +3065,7 @@ const SFX = (() => {
     const warm = ac.createBiquadFilter(); warm.type = 'lowpass'; warm.frequency.value = 9000; warm.Q.value = .5;
     out = ac.createGain(); out.gain.value = vol; out.connect(warm); warm.connect(comp); comp.connect(ac.destination);
     // 잔향: 어둡고 짧은 석실 느낌 + 이른 반사음
-    { const cv = ac.createConvolver(), L = ac.sampleRate * 1.6 | 0, ib = ac.createBuffer(2, L, ac.sampleRate); for (let c = 0; c < 2; c++) { const d = ib.getChannelData(c); for (let i = 0; i < L; i++) { const k = i / L; d[i] = (Math.random() * 2 - 1) * Math.pow(1 - k, 2.6) * (i < ac.sampleRate * .03 ? (Math.random() < .004 ? 3 : .4) : 1); } } cv.buffer = ib;
+    { const cv = ac.createConvolver(), L = ac.sampleRate * .9 | 0, ib = ac.createBuffer(2, L, ac.sampleRate); for (let c = 0; c < 2; c++) { const d = ib.getChannelData(c); for (let i = 0; i < L; i++) { const k = i / L; d[i] = (Math.random() * 2 - 1) * Math.pow(1 - k, 2.6) * (i < ac.sampleRate * .03 ? (Math.random() < .004 ? 3 : .4) : 1); } } cv.buffer = ib;
       const rv = ac.createGain(); rv.gain.value = .26; const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1900; const hp = ac.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 160; out.connect(rv); rv.connect(hp); hp.connect(lp); lp.connect(cv); cv.connect(comp); }
     const b = ac.createBuffer(1, ac.sampleRate, ac.sampleRate), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; noise = b;
     const bb = ac.createBuffer(1, ac.sampleRate, ac.sampleRate), e = bb.getChannelData(0); let l = 0; for (let i = 0; i < e.length; i++) { l = (l + .02 * (Math.random() * 2 - 1)) / 1.02; e[i] = l * 3.5; } brown = bb; loadSamples(); }
@@ -3498,7 +3499,7 @@ function gainXp(v) {
 }
 // 스킬·자동 공격 목표는 세로 폰 화면에 보이는 범위 안의 적만 (가로 ±230, 세로 ±420)
 const VIEW_HX = 230, VIEW_HY = 420;
-function inView(m) { return Math.abs(m.x - P.x) < VIEW_HX && Math.abs(m.y - P.y) < VIEW_HY; }
+function inView(m) { const vw = W / SCALE, vh = H / SCALE, mx = 34, top = TOUCH ? 70 : 50, bot = TOUCH ? 120 : 60; return Math.abs(m.x - P.x) < VIEW_HX && Math.abs(m.y - P.y) < VIEW_HY && m.x > CAM.x + mx && m.x < CAM.x + vw - mx && m.y > CAM.y + top && m.y < CAM.y + vh - bot; }
 function nearestMob(range) {
   let best = null, bd = range;
   for (const m of mobs) { if (m.hp <= 0 || !inView(m)) continue; const d = Math.hypot(m.x - P.x, m.y - P.y) - m.r; if (d < bd) { bd = d; best = m; } }
@@ -4517,7 +4518,7 @@ function drawStructures() {
   if (CUR === 'main') for (const [hx, hy] of HOUSES) { const k = HOUSES.findIndex(q => q[0] === hx && q[1] === hy), hk = HOUSES[k][2] || (k % 2 ? 't_inn' : 't_cottage'), im = TOWN_IMG[hk] || TOWN_IMG.t_cottage, HW = HOUSE_W[hk] || 150; if (!im) continue; const bx = hx * TS + TS * 1.5, by = hy * TS + TS * 2 + 22; if (Math.abs(bx - P.x) > 800 || Math.abs(by - P.y) > 700) continue; DECO.push({ x: bx, y: hy * TS + TS * 2 - 2, deco: () => { const w = HW, hh = w * im.height / im.width; ell(bx, by - 14, w * .42, 12, 'rgba(0,0,0,.32)'); ctx.drawImage(im, bx - w / 2, by - hh, w, hh); } }); }
   if (CUR === 'main') for (const [pk, dx, dy, pw] of TPROPS) { const im = TOWN_IMG[pk]; if (!im) continue; const bx = tc(CX + dx), by = tc(CY + dy) + 14; if (Math.abs(bx - P.x) > 800 || Math.abs(by - P.y) > 700) continue;
     DECO.push({ x: bx, y: by - 4, deco: () => { const hh = pw * im.height / im.width; if (pk !== 'tp_lamp') ell(bx, by - 2, pw * .36, 7, 'rgba(0,0,0,.35)'); ctx.drawImage(im, bx - pw / 2, by - hh, pw, hh);
-      if (pk === 'tp_lamp') { const lx = bx + pw * .22, ly = by - hh * .78, f = .85 + Math.sin(GT * 7 + dx) * .08; ctx.save(); ctx.globalCompositeOperation = 'lighter'; const gr = ctx.createRadialGradient(lx, ly, 0, lx, ly, 46); gr.addColorStop(0, 'rgba(255,190,100,' + (.42 * f) + ')'); gr.addColorStop(1, 'rgba(255,140,60,0)'); ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(lx, ly, 46, 0, TAU); ctx.fill(); ctx.restore(); } } }); }
+      if (pk === 'tp_lamp') { const lx = bx + pw * .22, ly = by - hh * .78, f = .85 + Math.sin(GT * 7 + dx) * .08; if (!LAMP_GLOW) { LAMP_GLOW = document.createElement('canvas'); LAMP_GLOW.width = LAMP_GLOW.height = 92; const lg = LAMP_GLOW.getContext('2d'), gr = lg.createRadialGradient(46, 46, 0, 46, 46, 46); gr.addColorStop(0, 'rgba(255,190,100,.42)'); gr.addColorStop(1, 'rgba(255,140,60,0)'); lg.fillStyle = gr; lg.fillRect(0, 0, 92, 92); } ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = f; ctx.drawImage(LAMP_GLOW, lx - 46, ly - 46); ctx.restore(); } } }); }
   // 분수
   const fx0 = tc(CX), fy0 = tc(CY);
   if (TOWN_IMG.t_well) { const im = TOWN_IMG.t_well; DECO.push({ x: tc(CX), y: fy0 + 26, deco: () => { const w = 120, hh = w * im.height / im.width; ctx.drawImage(im, fx0 - w / 2, fy0 + 40 - hh, w, hh); } }); } else {
@@ -4963,8 +4964,8 @@ for (const k of Object.keys(TURN_DATA)) { const im = new Image(); im.onload = ()
 // 씨프·엔지니어 외형별로 들어감(목록은 DIR_DATA 키). 없는 캐릭터·외형은 위아래로 움직여도 옆모습 그대로
 const DIR_DATA = window.DIR_DATA || {}; // 위아래 걷기 그림은 dir_data.js에 따로
 const DIRS = {}, VDIR_MS = 160;
-function turnImg(k) { return TURN[k] ? { im: TURN[k], ax: TURN_AX[k] || .5 } : DIRS[k] ? DIRS[k].F[0] : null; }
-for (const k of Object.keys(DIR_DATA)) { DIRS[k] = {}; for (const d of ['F', 'B']) DIRS[k][d] = DIR_DATA[k][d].map(([u, ax]) => { const im = new Image(); im.src = u; return { im, ax }; }); }
+function turnImg(k) { const D = dirOf(k); return TURN[k] ? { im: TURN[k], ax: TURN_AX[k] || .5 } : D ? D.F[0] : null; }
+function dirOf(k) { if (DIRS[k] !== undefined) return DIRS[k]; if (!DIR_DATA[k]) return (DIRS[k] = null); const o = DIRS[k] = {}; for (const d of ['F', 'B']) o[d] = DIR_DATA[k][d].map(([u, ax]) => { const im = new Image(); im.decoding = 'async'; im.src = u; return { im, ax }; }); return o; }
 function drawSprite(g, k, x, y, s, t, o) {
   const A = o.atk == null ? -1 : o.atk, walking = o.moving && A < 0 && WALK[k];
   const M = walking ? WALK_META[k] : SPR_META[k], img = walking ? WALK[k] : SPR[k];
@@ -4978,7 +4979,7 @@ function drawSprite(g, k, x, y, s, t, o) {
   // 돌아서기: 옆모습이 살짝 좁아지며 흐려지고 정면 그림이 겹쳐 떠올랐다가(중간에 정면), 반대쪽 옆모습으로 스르륵 넘어감
   // 정면 그림이 없는 스킨은 즉시 뒤집고 살짝 눌렸다 펴지게
   const ta = tk ? Math.sin(Math.PI * o.turnK) : 0;
-  const DV = DIRS[tkey], wph = ((o.walk || 0) % TAU + TAU) % TAU / TAU;
+  const DV = dirOf(tkey), wph = ((o.walk || 0) % TAU + TAU) % TAU / TAU;
   const pose = d => { if (!DV || A >= 0 || (d !== 'F' && d !== 'B')) return null; const L = DV[d]; if (o.moving) return L[Math.floor(wph * L.length) % L.length]; return d === 'F' ? turnImg(tkey) : L[1]; };
   const vk = o.vk == null ? 1 : o.vk, vCur = pose(o.vdir), vPrev = vk < 1 ? pose(o.vprev) : null, wCur = vk, wPrev = vk < 1 ? 1 - vk : 0;
   const sideW = (vCur ? 0 : wCur) + (vk < 1 && !vPrev ? wPrev : 0);
