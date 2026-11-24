@@ -1335,7 +1335,7 @@ function spawnTick() {
   const C = netSpawnCenter();
   let near = 0;
   for (const m of mobs) if (!m.boss && Math.abs(m.x - C.x) < 1100 && Math.abs(m.y - C.y) < 1100) near++;
-  if (near >= 84) return;
+  if (near >= 84 || (NET.grouped && mobs.length >= 150)) return; // 무리일 땐 담당자 기기 부담을 줄이려 전체 150마리까지
   for (let tries = 0; tries < 14; tries++) {
     const a = Math.random() * Math.PI * 2, dd = rand(360, 720);
     const x = C.x + Math.cos(a) * dd, y = C.y + Math.sin(a) * dd, i = tIdx(x, y);
@@ -2750,11 +2750,11 @@ function netMobs(L) {
   if (!(NET.on && NET.grouped && !NET.own && !RAID && !HOUSE)) return;
   NET.mobsAt = performance.now();
   if (NET.stale) { NET.stale = false; mobs = mobs.filter(m => m.mirror); shots = []; for (const st of lairState) st.mob = null; swarmOn = null; swarmWarn = 0; }
-  const seen = new Set();
+  const seen = new Set(), live = new Set(mobs);
   for (const [nid, type, lv, x, y, hp, maxHp, f, fl] of L) {
     if (!MOB[type]) continue; seen.add(nid);
     let e = NET.mm.get(nid);
-    if (!e || e.hp <= 0) { e = spawnMob(type, x, y, lv, !!(fl & 1)); e.mirror = 1; e.nid = nid; e.state = 'chase'; NET.mm.set(nid, e); }
+    if (!e || e.hp <= 0 || !live.has(e)) { e = spawnMob(type, x, y, lv, !!(fl & 1)); e.mirror = 1; e.nid = nid; e.state = 'chase'; NET.mm.set(nid, e); }
     e.tx = x; e.ty = y; if (Math.hypot(x - e.x, y - e.y) > 400) { e.x = x; e.y = y; }
     e.maxHp = maxHp; e.hp = (e.myHit && GT - e.myHit < .5) ? Math.max(1, Math.min(e.hp, hp)) : hp;
     e.face = f / 10; e.frz = fl & 2 ? .2 : 0; if (fl & 4) e.hit = Math.max(e.hit, .1); if (fl & 8) e.lunge = .12; e.air = fl & 16 ? 1 : null;
