@@ -41,7 +41,10 @@ const send = (ws, o) => { if (ws.readyState === 1) ws.send(typeof o === 'string'
 const broadcast = (o, except) => { const s = JSON.stringify(o); for (const p of players.values()) if (p !== except && p.ws.readyState === 1) p.ws.send(s); };
 const toId = (id, o) => { const q = players.get(id); if (q) send(q.ws, o); };
 
+// 끊긴 연결 정리: 5초마다 ping, 응답 없으면 종료
+setInterval(() => { for (const ws of wss.clients) { if (ws.isAlive === false) { ws.terminate(); continue; } ws.isAlive = false; try { ws.ping(); } catch (e) {} } }, 5000);
 wss.on('connection', (ws, req) => {
+  ws.isAlive = true; ws.on('pong', () => { ws.isAlive = true; });
   const origin = req.headers.origin || '';
   if (!ORIGINS.includes(origin)) { ws.close(1008, 'origin'); return; }
   if (players.size >= MAX_PLAYERS) { ws.close(1013, 'full'); return; }
@@ -53,7 +56,7 @@ wss.on('connection', (ws, req) => {
     let m; try { m = JSON.parse(buf); } catch (e) { return; }
     if (!m || typeof m !== 'object') return;
     if (m.t === 'hello' && !p.hello) {
-      Object.assign(p, profile(m)); p.x = num(m.x, 0, 20000); p.y = num(m.y, 0, 20000); p.hello = true; players.set(p.id, p);
+      Object.assign(p, profile(m)); p.x = num(m.x, 0, 20000); p.y = num(m.y, 0, 20000); p.v = num(m.v, 0, 99) | 0; p.hello = true; players.set(p.id, p);
       send(ws, { t: 'welcome', id: p.id, players: [...players.values()].filter(o => o !== p && o.hello).map(pub) });
       broadcast({ t: 'join', p: pub(p) }, p);
       return;
@@ -71,7 +74,7 @@ wss.on('connection', (ws, req) => {
       return;
     }
     // ── 같이 몹 잡기: 담당자 ↔ 무리원 중계 (같은 무리 안에서만)
-    if (m.t === 'mobs' && p.owner === p.id && Array.isArray(m.L)) { const s = JSON.stringify({ t: 'mobs', L: m.L.slice(0, 160) }); for (const id of p.mem) toId(id, s); return; }
+    if (m.t === 'mobs' && p.owner === p.id && Array.isArray(m.L)) { p.mobAt = Date.now(); const s = JSON.stringify({ t: 'mobs', L: m.L.slice(0, 160) }); for (const id of p.mem) toId(id, s); return; }
     if (m.t === 'fx' && p.owner === p.id) { const s = JSON.stringify({ t: 'fx', k: clean(m.k, 12), a: Array.isArray(m.a) ? m.a.slice(0, 12) : [] }); for (const id of p.mem) toId(id, s); return; }
     if (m.t === 'kill' && p.owner === p.id) { const s = JSON.stringify({ t: 'kill', n: m.n, by: Array.isArray(m.by) ? m.by.slice(0, 20) : [] }); for (const id of p.mem) toId(id, s); return; }
     if (m.t === 'hurt' && p.owner === p.id && p.mem.includes(m.to)) { toId(m.to, { t: 'hurt', v: num(m.v, 0, 1e9), n: m.n }); return; }
@@ -83,7 +86,7 @@ wss.on('connection', (ws, req) => {
 
 // 무리 나누기: 같은 맵·레이드/폐가 밖·서로 GROUP_R 안이면 이어진 한 무리 → 가장 먼저 들어온 사람(아이디가 가장 작은 사람)이 담당
 function regroup() {
-  const L = [...players.values()].filter(p => p.hello), par = new Map(L.map(p => [p.id, p.id]));
+  const now = Date.now(), L = [...players.values()].filter(p => p.hello && p.v >= 2), par = new Map(L.map(p => [p.id, p.id]));
   const find = a => { while (par.get(a) !== a) { par.set(a, par.get(par.get(a))); a = par.get(a); } return a; };
   for (let i = 0; i < L.length; i++) for (let j = i + 1; j < L.length; j++) {
     const a = L[i], b = L[j]; if (a.inst || b.inst || a.map !== b.map) continue;
@@ -91,7 +94,9 @@ function regroup() {
   }
   const groups = new Map(); for (const p of L) { const r = find(p.id); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(p); }
   for (const G of groups.values()) {
-    const owner = Math.min(...G.map(p => p.id)), ids = G.map(p => p.id);
+    // 담당자: 아이디 순서대로, 최근에 몹 데이터를 안 보내 '응답 없음' 처리된 사람은 건너뜀
+    const order = G.map(p => p.id).sort((a, b) => a - b), ok = order.filter(id => !(players.get(id).badUntil > now)), owner = (ok.length ? ok : order)[0], ids = G.map(p => p.id), op = players.get(owner);
+    if (G.length > 1) { if (op.ownSince == null || op.owner !== owner) op.ownSince = now; if (now - op.ownSince > 3000 && now - (op.mobAt || 0) > 3000) { op.badUntil = now + 30000; op.ownSince = null; } } else op.ownSince = null;
     for (const p of G) { const mem = ids.filter(id => id !== p.id), key = owner + '|' + mem.join(','); if (key !== p.gkey) { p.gkey = key; p.owner = owner; p.mem = mem; send(p.ws, { t: 'own', o: owner, mem }); } }
   }
 }

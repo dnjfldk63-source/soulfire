@@ -2720,7 +2720,7 @@ const NET = { ws: null, id: 0, on: false, others: new Map(), sendT: 0, last: '',
 // ── 같이 몹 잡기 ──
 //  무리(서로 약 50칸 안)마다 서버가 담당자 1명을 정함. 담당자는 평소처럼 몹을 계산해 0.12초마다 나눠 주고,
 //  나머지는 그 몹을 따라 그림(mirror). 나머지가 때린 피해는 담당자에게 가고, 처치되면 때린 사람 모두 각자 보상.
-const netMirror = () => NET.on && NET.grouped && !NET.own && !RAID && !HOUSE;
+const netMirror = () => NET.on && NET.grouped && !NET.own && !NET.stale && !RAID && !HOUSE;
 const netNid = () => NET.id * 1e6 + (++NET.mseq);
 function netTargets() { const out = []; for (const id of NET.mem) { const o = NET.others.get(id); if (o && o.map === CUR && !o.inst && !o.dead) { o.r = 14; o.isRemote = 1; out.push(o); } } return out; }
 function netNear(x, y, R) { if (Math.hypot(x - P.x, y - P.y) < R) return true; if (NET.own && NET.grouped) for (const o of netTargets()) if (Math.hypot(x - o.x, y - o.y) < R) return true; return false; }
@@ -2730,12 +2730,13 @@ function netGroup(o, mem) {
   const was = NET.grouped && !NET.own;
   NET.owner = o; NET.mem = mem; NET.grouped = mem.length > 0; NET.own = o === NET.id;
   const now = NET.grouped && !NET.own;
-  if (now && !was) { mobs = mobs.filter(m => m.mirror); shots = []; for (const st of lairState) st.mob = null; swarmOn = null; swarmWarn = 0; NET.mm.clear(); log('근처 플레이어와 같은 몹을 함께 상대해요', '#7fd8ff'); }
+  if (now) NET.groupAt = performance.now(); else NET.stale = false;
+  if (now && !was) { NET.stale = false; mobs = mobs.filter(m => m.mirror); shots = []; for (const st of lairState) st.mob = null; swarmOn = null; swarmWarn = 0; NET.mm.clear(); log('근처 플레이어와 같은 몹을 함께 상대해요', '#7fd8ff'); }
   else if (!now && was) { for (const m of mobs) if (m.mirror) { m.mirror = 0; m.sx = m.x; m.sy = m.y; m.state = 'chase'; m.nid = netNid(); } NET.mm.clear(); LAIRS.forEach((L, k) => { const b = mobs.find(m => m.type === L.boss && m.hp > 0); lairState[k].mob = b || null; }); }
   if (NET.grouped && NET.own && !was) log('근처 플레이어와 같은 몹을 함께 상대해요 (내가 몹 계산을 맡아요)', '#7fd8ff');
 }
 function netMobsOut() {
-  const L = [], T = netTargets(); if (!T.length) return;
+  const L = [], T = netTargets(); // 무리원이 없어도 빈 목록을 보내 '살아 있음'을 알림
   for (const e of mobs) {
     if (e.hp <= 0 || e.d.inert) continue;
     let near = false; for (const o of T) if (Math.abs(o.x - e.x) < 1300 && Math.abs(o.y - e.y) < 1000) { near = true; break; } if (!near) continue;
@@ -2746,7 +2747,9 @@ function netMobsOut() {
   netSend({ t: 'mobs', L });
 }
 function netMobs(L) {
-  if (!netMirror()) return;
+  if (!(NET.on && NET.grouped && !NET.own && !RAID && !HOUSE)) return;
+  NET.mobsAt = performance.now();
+  if (NET.stale) { NET.stale = false; mobs = mobs.filter(m => m.mirror); shots = []; for (const st of lairState) st.mob = null; swarmOn = null; swarmWarn = 0; }
   const seen = new Set();
   for (const [nid, type, lv, x, y, hp, maxHp, f, fl] of L) {
     if (!MOB[type]) continue; seen.add(nid);
@@ -2757,6 +2760,12 @@ function netMobs(L) {
     e.face = f / 10; e.frz = fl & 2 ? .2 : 0; if (fl & 4) e.hit = Math.max(e.hit, .1); if (fl & 8) e.lunge = .12; e.air = fl & 16 ? 1 : null;
   }
   for (const [nid, e] of NET.mm) if (!seen.has(nid)) { e.hp = 0; NET.mm.delete(nid); }
+}
+function netDeadTick(dt) {
+  GT += dt;
+  for (const e of mobs) if (e.hp > 0) { if (e.mirror) mirrorStep(e, dt); else updateMob(e, dt); }
+  for (const s0 of shots) { s0.x += s0.vx * dt; s0.y += s0.vy * dt; s0.life -= dt; if (wallAt(s0.x, s0.y)) s0.life = 0; else if (!s0.vis && NET.own) for (const o of netTargets()) if (Math.hypot(s0.x - o.x, s0.y - o.y) < 14 + s0.size) { s0.life = 0; netHurt(o, s0.dmg, s0.src); break; } }
+  shots = shots.filter(x => x.life > 0); netTick(dt);
 }
 function mirrorStep(e, dt) { e.anim += dt; e.hit -= dt; if (e.lunge) e.lunge -= dt; if (e.tx == null) return; const k = Math.min(1, dt * 12); e.x += (e.tx - e.x) * k; e.y += (e.ty - e.y) * k; }
 function netDmgIn(m) {
@@ -2782,7 +2791,7 @@ function netConnect() {
   if (!NET_OK || NET.ws || !started || typeof WebSocket === 'undefined') return;
   let ws; try { ws = new WebSocket(NET_URL); } catch (e) { return; }
   NET.ws = ws;
-  ws.onopen = () => { NET.retry = 3000; netSend(Object.assign({ t: 'hello' }, netMe())); };
+  ws.onopen = () => { NET.retry = 3000; netSend(Object.assign({ t: 'hello', v: 2 }, netMe())); };
   ws.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch (_) { return; } netOn(m); };
   ws.onclose = () => { const was = NET.on; NET.ws = null; NET.on = false; NET.others.clear(); netUi(); if (was) log('서버 연결이 끊겼어요 · 다시 연결 중…', '#8aa0b0'); clearTimeout(NET.timer); NET.timer = setTimeout(netConnect, NET.retry); NET.retry = Math.min(60000, NET.retry * 2); };
   ws.onerror = () => {};
@@ -2807,6 +2816,7 @@ function netOn(m) {
 function netUi() { const b = $('#chatBtn'); if (!b) return; b.hidden = !NET.on; $('#onlineN').textContent = NET.on ? String(NET.others.size + 1) : ''; if (!NET.on) $('#chatBar').hidden = true; }
 function netTick(dt) {
   if (!NET_OK) return;
+  { const n = performance.now(); if (NET.on && NET.grouped && !NET.own && !NET.stale && n - (NET.mobsAt || 0) > 3000 && n - (NET.groupAt || 0) > 3000) { NET.stale = true; for (const m of mobs) if (m.mirror) { m.mirror = 0; m.sx = m.x; m.sy = m.y; m.nid = 0; } NET.mm.clear(); } }
   if (!NET.ws && started && !NET.timer) netConnect();
   if (!NET.on) return;
   for (const o of NET.others.values()) { const k = Math.min(1, dt * 10); o.x += (o.tx - o.x) * k; o.y += (o.ty - o.y) * k; if (o.mv) o.walk += dt * 10; if (o.bubT > 0) o.bubT -= dt; }
@@ -6365,7 +6375,8 @@ function frame(now) {
   const dt = Math.max(0, Math.min(.05, (now - last) / 1000)); last = now;
   if (FISH) fishUpdate(dt);
   if (ZV) zvTick(dt);
-  if (HITSTOP > 0) { HITSTOP -= dt; } else if (started && !ZV && !panel && !P.dead && !lvlOpen && !LOCK && !CUT && !DLG && !FISH && !RW && !ENDING && $('#raidRes').hidden) { update(dt); gatherTick(dt); wnodeTick(dt); engTick(dt); thfTick(dt); warpTick(dt); petTick(dt); critTick(dt); netTick(dt); if (P.bubT > 0) P.bubT -= dt; autoPortal(); }
+  if (HITSTOP > 0) { HITSTOP -= dt; } else if (started && !ZV && !P.dead && !CUT && !ENDING && ((NET.on && NET.grouped) || (!panel && !lvlOpen && !LOCK && !DLG && !FISH && !RW && $('#raidRes').hidden))) { update(dt); gatherTick(dt); wnodeTick(dt); engTick(dt); thfTick(dt); warpTick(dt); petTick(dt); critTick(dt); netTick(dt); if (P.bubT > 0) P.bubT -= dt; autoPortal(); }
+  else if (started && P.dead && NET.on && NET.grouped && !ENDING) netDeadTick(dt); // 쓰러져 있어도 무리의 몹은 계속 움직임
   else if (!started) { GT += dt; P.walk = 0; }
   if (ZV) { const S0 = SCALE; SCALE = S0 * zvZoom(); draw(); SCALE = S0; } else draw();
   if (started) { window.__bgmT = (window.__bgmT || 0) - dt; if (window.__bgmT <= 0) { window.__bgmT = 1.5; bgmZone(); } }
