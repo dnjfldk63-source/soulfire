@@ -2102,7 +2102,7 @@ function npcOpen(kind) {
 // 미니맵 퀘스트 표시: [{tx,ty,map,col}]
 function questMarks() {
   const out = [], add = (z, col) => { const w = WPS[ZWP[z]]; if (w) out.push({ tx: w.tx, ty: w.ty, map: w.map || 'main', col }); };
-  const q = qState(), Q = QUESTS[q.i]; if (Q && q.st === 'active' && q.n < QN()) add(Q.z, '#ffd23a');
+  const q = qState(), Q = QUESTS[q.i]; if (Q && q.st === 'active' && q.n < QN()) { const L = LAIRS.find(l => l.boss === Q.mob); if (Q.mob === 'ashwarden') out.push({ tx: SPIRE.tx, ty: SPIRE.ty, map: 'crypt', col: '#ffd23a' }); else if (L) out.push({ tx: L.tx, ty: L.ty, map: L.map || 'main', col: '#ffd23a' }); else add(Q.z, '#ffd23a'); } // 보스 퀘스트는 보스 둥지·종탑 문을 직접 가리킴
   const S2 = sqState(); for (const id in S2) { const s = S2[id], sq = SUBQ[id]; if (!sq || s.st !== 'active' || s.n >= qNeed(sq)) continue; if (sq.type === 'fish') out.push({ tx: DOCK.tx, ty: POND.ty, map: 'main', col: '#6fd6ff' }); else if (sq.type === 'deliver') { const n = NPCS.find(x => x.kind === sq.to); if (n) out.push({ tx: Math.round(n.tx), ty: Math.round(n.ty), map: n.map || 'main', col: '#6fd6ff' }); } else add(sq.z, '#6fd6ff'); }
   return out;
 }
