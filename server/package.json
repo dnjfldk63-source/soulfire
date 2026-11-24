@@ -1,0 +1,10 @@
+{
+  "name": "soulfire-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "소울파이어 멀티 서버 (접속 · 위치 · 채팅)",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" },
+  "dependencies": { "ws": "^8.18.0" }
+}
