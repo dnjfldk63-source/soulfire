@@ -3039,8 +3039,8 @@ const BGM_SYN = (() => {
 // canyon: 「Evil temple ambiance loop」 · grave: 「Moonlit Lullaby for the Lost」 · snow: 「Snow Theme」 · crypt: 「Dungeon Ambience」
 // house: 「Dark Cavern Ambient」 · raid: Juhani Junkala 「Epic Boss Battle」 — 모두 CC0
 const BGM = (() => {
-  const FILES = { town: 'town', field: 'field', forest: 'field', ruin: 'field', canyon: 'field', grave: 'field', snow: 'snow', crypt: 'field', house: 'field', raid: 'raid', title: 'title', death: 'death' };
-  const LV = { town: .8, field: .75, snow: .8, raid: .55, title: .85, death: .9 };
+  const FILES = { town: 'town', field: 'field', forest: 'field', ruin: 'field', canyon: 'field', grave: 'field', snow: 'snow', crypt: 'crypt', house: 'field', raid: 'raid', title: 'title', death: 'death' };
+  const LV = { town: .8, field: .75, snow: .8, crypt: .85, raid: .55, title: .85, death: .9 };
   let ac = null, master = null, mood = null, on = BGM_SYN.on, vol = BGM_SYN.vol, cur = null, failed = false; const tr = {};
   function init() { if (ac) return; const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return; ac = new AC(); master = ac.createGain(); master.gain.value = 0; master.connect(ac.destination); }
   function track(f) {
@@ -3065,7 +3065,7 @@ const BGM = (() => {
   function kick() {
     if (!ac || !on || failed) return; if (ac.state !== 'running') { try { ac.resume(); } catch (e) {} }
     if (cur && cur.el.paused) { const p = cur.el.play(); if (p && p.catch) p.catch(() => {}); }
-    for (const f of ['town', 'field', 'snow', 'raid', 'death']) { const T = track(f); if (T === cur || T.un || !T.el.paused) continue; T.un = 1; const p = T.el.play(); if (p && p.then) p.then(() => { if (cur !== T) T.el.pause(); }).catch(() => { T.un = 0; }); }
+    for (const f of ['town', 'field', 'snow', 'crypt', 'raid', 'death']) { const T = track(f); if (T === cur || T.un || !T.el.paused) continue; T.un = 1; const p = T.el.play(); if (p && p.then) p.then(() => { if (cur !== T) T.el.pause(); }).catch(() => { T.un = 0; }); }
   }
   for (const e of ['pointerdown', 'touchend', 'keydown']) window.addEventListener(e, kick, { capture: true, passive: true });
   // 합성 음악은 꺼 둔 채로 대기(녹음을 못 불러오면 그때 켬)
