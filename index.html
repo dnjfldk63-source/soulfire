@@ -3014,13 +3014,13 @@ const BGM_SYN = (() => {
 // canyon: 「Evil temple ambiance loop」 · grave: 「Moonlit Lullaby for the Lost」 · snow: 「Snow Theme」 · crypt: 「Dungeon Ambience」
 // house: 「Dark Cavern Ambient」 · raid: Juhani Junkala 「Epic Boss Battle」 — 모두 CC0
 const BGM = (() => {
-  const FILES = { town: 'town', field: 'field', forest: 'field', ruin: 'field', canyon: 'field', grave: 'field', snow: 'snow', crypt: 'field', house: 'field', raid: 'field' };
-  const LV = { town: .8, field: .75, snow: .8 };
+  const FILES = { town: 'town', field: 'field', forest: 'field', ruin: 'field', canyon: 'field', grave: 'field', snow: 'snow', crypt: 'field', house: 'field', raid: 'raid', title: 'title', death: 'death' };
+  const LV = { town: .8, field: .75, snow: .8, raid: .55, title: .85, death: .9 };
   let ac = null, master = null, mood = null, on = BGM_SYN.on, vol = BGM_SYN.vol, cur = null, failed = false; const tr = {};
   function init() { if (ac) return; const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return; ac = new AC(); master = ac.createGain(); master.gain.value = 0; master.connect(ac.destination); }
   function track(f) {
     if (tr[f]) return tr[f];
-    const el = new Audio(); el.src = 'music/' + f + '.mp3'; el.loop = true; el.preload = 'auto'; el.crossOrigin = 'anonymous';
+    const el = new Audio(); el.src = 'music/' + f + '.mp3'; el.loop = f !== 'death'; el.preload = 'auto'; el.crossOrigin = 'anonymous';
     const T = tr[f] = { el, g: null, ok: null };
     el.addEventListener('canplay', () => { T.ok = true; }, { once: true });
     el.addEventListener('error', () => { T.ok = false; if (mood && FILES[mood] === f) useSynth(); }, { once: true });
@@ -3035,12 +3035,12 @@ const BGM = (() => {
     if (cur && cur !== nx) { const old = cur; old.g.gain.cancelScheduledValues(n); old.g.gain.setTargetAtTime(0, n, .6); setTimeout(() => { if (cur !== old) try { old.el.pause(); } catch (e) {} }, 3500); }
     if (cur === nx && !nx.el.paused) return; cur = nx; nx.g.gain.cancelScheduledValues(n); nx.g.gain.setTargetAtTime(LV[f] || .8, n + .2, .7);
     if (ac.state !== 'running') { try { ac.resume(); } catch (e) {} }
-    if (nx.el.paused) { const p = nx.el.play(); if (p && p.catch) p.catch(() => {}); }
+    if (nx.el.paused) { if (f === 'raid' || f === 'death') { try { nx.el.currentTime = 0; } catch (e) {} } const p = nx.el.play(); if (p && p.catch) p.catch(() => {}); }
   }
   function kick() {
     if (!ac || !on || failed) return; if (ac.state !== 'running') { try { ac.resume(); } catch (e) {} }
     if (cur && cur.el.paused) { const p = cur.el.play(); if (p && p.catch) p.catch(() => {}); }
-    for (const f of ['town', 'field', 'snow']) { const T = track(f); if (T === cur || T.un || !T.el.paused) continue; T.un = 1; const p = T.el.play(); if (p && p.then) p.then(() => { if (cur !== T) T.el.pause(); }).catch(() => { T.un = 0; }); }
+    for (const f of ['town', 'field', 'snow', 'raid', 'death']) { const T = track(f); if (T === cur || T.un || !T.el.paused) continue; T.un = 1; const p = T.el.play(); if (p && p.then) p.then(() => { if (cur !== T) T.el.pause(); }).catch(() => { T.un = 0; }); }
   }
   for (const e of ['pointerdown', 'touchend', 'keydown']) window.addEventListener(e, kick, { capture: true, passive: true });
   // 합성 음악은 꺼 둔 채로 대기(녹음을 못 불러오면 그때 켬)
@@ -3056,7 +3056,9 @@ const BGM = (() => {
   };
 })();
 
-function bgmZone() { if (!started) return; const z = RAID ? 'raid' : HOUSE ? 'house' : CUR === 'snow' ? 'snow' : CUR === 'crypt' ? 'crypt' : ({ 0: 'town', 1: 'field', 2: 'forest', 3: 'ruin', 4: 'canyon', 5: 'grave' })[zoneAt(P.x, P.y)] || 'field'; BGM.mood(z); }
+function bgmTitle() { if (started || !BGM.on) return; BGM.mood('title'); BGM.start(); }
+for (const e of ['pointerdown', 'keydown']) window.addEventListener(e, bgmTitle, { capture: true, passive: true });
+function bgmZone() { if (!started) return; const z = P.dead ? 'death' : RAID ? 'raid' : HOUSE ? 'house' : CUR === 'snow' ? 'snow' : CUR === 'crypt' ? 'crypt' : ({ 0: 'town', 1: 'field', 2: 'forest', 3: 'ruin', 4: 'canyon', 5: 'grave' })[zoneAt(P.x, P.y)] || 'field'; BGM.mood(z); }
 
 // ───────── 효과음 (합성 · 동시 재생 제한) ─────────
 let HITSTOP = 0, HITSTOP_LAST = 0, SFXK = null, DSRC = null, DMGLOG = null; const CLS_SFX = { mik: 'blunt', chae: 'blade', min: 'magic', kok: 'axe', mun: 'sword' };
@@ -3994,7 +3996,7 @@ function teleportTo(wp) {
   rings.push({ x: P.x, y: P.y, t: 0, life: .5, r: 70, col: '120,200,255' });
 }
 function die() {
-  P.dead = true; P.hp = 0; P.recall = 0; P.stormT = 0; P.flameT = 0;
+  P.dead = true; P.hp = 0; P.recall = 0; P.stormT = 0; P.flameT = 0; bgmZone();
   const lost = Math.floor(P.gold * .1);
   const canStone = RAID && !RAID.done && (P.rs || 0) > 0 && RAID.revives < 3;
   $('#btnStone').hidden = !canStone;
