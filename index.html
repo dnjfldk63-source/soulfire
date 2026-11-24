@@ -36,6 +36,7 @@ body{background:var(--ink);color:var(--text);font-family:var(--f-body);overflow:
 #pts{font-size:12px;color:var(--good)}
 #cp{font-family:var(--f-ui);font-size:12px;color:#e8b86a;font-variant-numeric:tabular-nums;margin-right:auto}#cp b{color:#ffd58a;font-size:13.5px}
 #miniWrap{right:calc(env(safe-area-inset-right,0px) + 16px);padding:6px;background:var(--panel);border:1px solid var(--line);border-radius:8px}
+#setBtn{position:absolute;left:-44px;top:0;width:36px;height:36px;border-radius:50%;border:1px solid #8a6238;background:radial-gradient(circle at 50% 35%,#2c1d14,#0d0806);color:#ffd58a;font-size:19px;line-height:1;cursor:pointer;pointer-events:auto;box-shadow:0 2px 8px rgba(0,0,0,.6)}#setBtn:hover{border-color:#d6903a}
 #mini{display:block;width:150px;height:150px;image-rendering:pixelated}
 
 /* 세로형 폰: 맨 위 얇은 경험치 바 + 한 줄 정보, 체력·마나는 캐릭터 머리 위(캔버스) */
@@ -588,7 +589,7 @@ body.touch #recallBar{bottom:calc(env(safe-area-inset-bottom,0px) + 150px)}
   <div class="row"><span id="gold">0 골드</span><span id="cp"></span><span id="pts"></span></div>
   <div id="skTray"></div>
 </div>
-<div class="hud top" id="miniWrap"><canvas id="mini" width="150" height="150"></canvas></div>
+<div class="hud top" id="miniWrap"><canvas id="mini" width="150" height="150"></canvas><button id="setBtn" title="설정 (소리 · 게임)" aria-label="설정">⚙</button></div>
 <div class="hud" id="log"></div>
 <div class="hud" id="eqToast" hidden></div>
 <div class="ov" id="lvlPick" hidden><div class="lp"><div class="eyebrow-latin">Level up</div><h2 class="metal" id="lpTitle">레벨 업</h2><div class="note" id="lpNote">기술 하나를 고르세요 · 같은 기술을 또 고르면 강해져요 (최대 5)</div><div class="lp-cards" id="lpCards"></div></div></div>
@@ -5287,6 +5288,9 @@ const icon = (slot, col) => `<svg viewBox="0 0 24 24" fill="none" stroke="${col}
 let panel = null, sel = null, forgeMsg = '';
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 function openPanel(kind) { if (!panel) SFX.open(); panel = kind; if (kind === 'inv') { sel = null; P._invTab = 'eq'; } forgeMsg = ''; $('#panel').hidden = false; renderPanel(); }
+function openSettings() { if (panel === 'inv' && P._invTab === 'set') { closePanel(); return; } openPanel('inv'); P._invTab = 'set'; renderPanel(); }
+$('#setBtn').addEventListener('click', e => { e.stopPropagation(); if (started) openSettings(); });
+$('#setBtn').addEventListener('pointerdown', e => e.stopPropagation());
 function closePanel() { panel = null; $('#panel').hidden = true; save(); }
 const LS_MUL = .1;
 const statVal = (k, v) => k === 'ls' ? `${Math.round(v * LS_MUL * 100) / 100}%` : PCT[k] ? `${(Math.round(v * 10) / 10)}%` : k === 'regen' ? `${(Math.round(v * 10) / 10)}` : fmt(v);
