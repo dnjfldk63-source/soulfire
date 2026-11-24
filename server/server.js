@@ -7,7 +7,7 @@ const { WebSocketServer } = require('ws');
 
 const PORT = process.env.PORT || 10000;
 // 접속을 허용할 게임 주소 (쉼표로 여러 개)
-const ORIGINS = (process.env.ORIGINS || 'https://dnjfldk63-source.github.io,http://localhost:5192,http://127.0.0.1:5192').split(',').map(s => s.trim());
+const ORIGINS = (process.env.ORIGINS || 'https://soul-fire.onrender.com,https://dnjfldk63-source.github.io,http://localhost:5192,http://127.0.0.1:5192').split(',').map(s => s.trim());
 const MAX_PLAYERS = 200;
 const GROUP_R = 1600; // 이 거리(px, 약 50칸) 안에 있으면 같은 무리
 

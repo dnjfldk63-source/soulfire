@@ -1,5 +1,6 @@
 
 <title>소울파이어</title>
+<script id="redir">if (/github\.io$/.test(location.hostname)) location.replace('https://soul-fire.onrender.com/' + location.search + location.hash);</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -2715,7 +2716,7 @@ function critTick(dt) {
 }
 // ───────── 멀티: 다른 플레이어 표시 · 채팅 (Render 서버) ─────────
 const NET_URL = /[?&]net=local/.test(location.search) ? 'ws://localhost:10000/ws' : 'wss://soulfire-server.onrender.com/ws';
-const NET_OK = /github\.io$|^localhost$|^127\.0\.0\.1$/.test(location.hostname); // 아티팩트 등 다른 곳에서는 혼자 플레이
+const NET_OK = /onrender\.com$|github\.io$|^localhost$|^127\.0\.0\.1$/.test(location.hostname); // 아티팩트 등 다른 곳에서는 혼자 플레이
 const NET = { ws: null, id: 0, on: false, others: new Map(), sendT: 0, last: '', st: '', retry: 3000, pingT: 0, timer: 0, owner: 0, mem: [], own: true, grouped: false, mm: new Map(), mseq: 0, mobT: 0 };
 // ── 같이 몹 잡기 ──
 //  무리(서로 약 50칸 안)마다 서버가 담당자 1명을 정함. 담당자는 평소처럼 몹을 계산해 0.12초마다 나눠 주고,
