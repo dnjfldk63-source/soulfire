@@ -298,6 +298,8 @@ body.zv .hud,body.zv #skills,body.zv #prompt,body.zv #npcTalk{opacity:0!importan
 #qTog{position:absolute;right:2px;top:2px;width:18px;height:18px;padding:0;border:0;border-radius:4px;background:rgba(0,0,0,.35);color:#ffd58a;font-size:12px;line-height:18px;cursor:pointer;pointer-events:auto}
 #qTrack.fold{padding:3px 22px 3px 6px}#qTrack.fold #qBody{display:none}#qTrack.fold::before{content:'📜 퀘스트';font-size:11px;color:#ffd58a}
 #qTrack #qBody>div+div{margin-top:4px;padding-top:4px;border-top:1px solid rgba(58,42,32,.6)}#qTrack .qs b{color:#8fd8ff}#qTrack b{color:#ffd58a;font-family:var(--f-display)}#qTrack .qn{color:#ffcf6a;font-weight:700}#qTrack .qd{color:#7fffb0}
+.qgo{pointer-events:auto;cursor:pointer;display:inline-block;margin-left:4px;padding:1px 7px;border-radius:9px;background:rgba(90,170,255,.22);border:1px solid rgba(140,200,255,.6);color:#bfe4ff;font-size:.85em;font-weight:700;white-space:nowrap}
+.qgo:active{background:rgba(90,170,255,.45)}
 body.compact #qTrack{max-width:180px;font-size:11px}
 #cpToast{z-index:60;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 104px);transform:translate(-50%,10px);opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;background:rgba(10,7,7,.82);border:1px solid #3a2a24;border-radius:20px;padding:6px 16px;font-family:var(--f-ui);font-size:13px;color:#e8dcc8;white-space:nowrap;font-variant-numeric:tabular-nums;box-shadow:0 6px 20px rgba(0,0,0,.6)}
 #cpToast.on{opacity:1;transform:translate(-50%,0)}
@@ -591,6 +593,8 @@ body.touch #recallBar{bottom:calc(env(safe-area-inset-bottom,0px) + 150px)}
 .btn.pri:hover{border-color:#e8c27a;box-shadow:inset 0 1px 0 rgba(255,220,160,.35),inset 0 0 0 1px #2a0504,0 0 18px rgba(220,60,30,.4)}
 .chip{font-family:var(--f-display);font-weight:800}
 @media (prefers-reduced-motion:reduce){.bar>i,#banner,#log div{transition:none}}
+#bossbar .nm.ck{font-size:15px;white-space:nowrap}
+.crk{font-size:.85em!important;color:#7fd8ff;font-weight:700;font-size:.72em;margin-left:5px;white-space:nowrap;vertical-align:baseline;text-shadow:0 0 6px rgba(80,180,255,.7)}
 </style>
 
 <canvas id="game" aria-label="게임 화면"></canvas>
@@ -1291,11 +1295,11 @@ function calc() {
   s.mspd += sv('swift', SKILLS.swift.v);
   s.atk *= 1 + sv('power', SKILLS.power.v) / 100; s.mag *= 1 + sv('power', SKILLS.power.v) / 100;
   s.maxHp *= 1 + sv('vigor', SKILLS.vigor.v) / 100; s.regen += sl('vigor') * 1.2;
-  s.cdr = (s.cdr || 1) * (1 - .06 * Math.min(5, sl('haste')) - .03 * Math.max(0, sl('haste') - 5)); s.aspd += 6 * sl('haste');
+  s.cdr = (s.cdr || 1) * (1 - .04 * Math.min(5, sl('haste')) - .02 * Math.max(0, sl('haste') - 5) - (sl('haste') >= 6 ? .05 : 0)); s.aspd += 5 * sl('haste');
   s.ls += sv('vamp', SKILLS.vamp.v);
   s.dr = 0;
   if (sl('swift') >= 6) s.dodge += 5; if (sl('power') >= 6) s.critDmg += 25; if (sl('vigor') >= 6) s.dr = .1;
-  if (sl('haste') >= 6) s.aspd += 15; if (sl('crit') >= 6) s.critDmg += 30; if (sl('magnet') >= 6) s.gold += 30;
+  if (sl('crit') >= 6) s.critDmg += 30; if (sl('magnet') >= 6) s.gold += 30;
   s.crit += 5 * sl('crit'); s.critDmg += 10 * sl('crit');
   s.pickR = 30 + 18 * sl('magnet'); s.magnet = 110 + 45 * sl('magnet'); s.gold += 10 * sl('magnet');
   { const pd = P.pet && (P.pets || []).includes(P.pet) && PETS[P.pet]; if (pd) { const t = pd.st; s.atk *= 1 + (t.atkP || 0) / 100; s.mag *= 1 + (t.atkP || 0) / 100; s.crit += t.crit || 0; s.critDmg += t.critDmg || 0; s.def += t.def || 0; s.maxHp *= 1 + (t.hpP || 0) / 100; s.cdrp += t.cdrp || 0; s.regen += t.regen || 0; s.aspd += t.aspd || 0; } }
@@ -2181,6 +2185,19 @@ function npcOpen(kind) {
   if (kind === 'garet_n') return questTalk('garet_n');
   npcMenu(kind); }
 // 미니맵 퀘스트 표시: [{tx,ty,map,col}]
+// 메인 퀘스트 바로 이동: 말 걸기 → 그 사람 앞, 사냥 → 느낌표(퀘스트 표시) 구간
+function mqDest() {
+  const q = qState(), Q = QUESTS[q.i]; if (!Q || q.st !== 'active') return null;
+  if (Q.type === 'talk') { const n = npcByKind(Q.to); return n ? { tx: Math.round(n.tx), ty: Math.round(n.ty) + 1, map: n.map || 'main' } : null; }
+  if (q.n >= QN()) return null;
+  const L = LAIRS.find(l => l.boss === Q.mob); if (Q.mob === 'ashwarden') return { tx: SPIRE.tx, ty: SPIRE.ty + 2, map: 'crypt' };
+  if (L) return { tx: L.tx, ty: L.ty + 4, map: L.map || 'main' };
+  const w = WPS[ZWP[Q.z]]; return w ? { tx: w.tx, ty: w.ty, map: w.map || 'main' } : null;
+}
+function questWarp() {
+  if (RAID || HOUSE || P.dead || WARP || FISH) { log('지금은 바로 이동할 수 없어요', '#a0978a'); return; }
+  const d = mqDest(); if (!d) return; warpTo(d);
+}
 function questMarks() {
   const out = [], add = (z, col) => { const w = WPS[ZWP[z]]; if (w) out.push({ tx: w.tx, ty: w.ty, map: w.map || 'main', col }); };
   const q = qState(), Q = QUESTS[q.i]; if (Q && Q.type === 'talk' && q.st === 'active') { const n = npcByKind(Q.to); if (n) out.push({ tx: Math.round(n.tx), ty: Math.round(n.ty), map: n.map || 'main', col: '#ffd23a' }); } else if (Q && q.st === 'active' && q.n < QN()) { const L = LAIRS.find(l => l.boss === Q.mob); if (Q.mob === 'ashwarden') out.push({ tx: SPIRE.tx, ty: SPIRE.ty, map: 'crypt', col: '#ffd23a' }); else if (L) out.push({ tx: L.tx, ty: L.ty, map: L.map || 'main', col: '#ffd23a' }); else add(Q.z, '#ffd23a'); } // 보스 퀘스트는 보스 둥지·종탑 문을 직접 가리킴
@@ -2196,8 +2213,8 @@ function npcMark(n) {
 }
 function questHud() {
   const rows = [], q = qState(), Q = QUESTS[q.i];
-  if (Q && Q.type === 'talk' && q.st === 'active') rows.push(`<div class="qm">📜 <b>${Q.title}</b><br>${talkWho(Q.to).name}에게 말 걸기</div>`);
-  else if (Q) { if (q.st === 'active') rows.push(q.n >= QN() ? `<div class="qm qc" data-qc="main">📜 <b>${Q.title}</b><br><span class="qd">완료! 눌러서 보상 받기 ▸</span></div>` : `<div class="qm">📜 <b>${Q.title}</b><br>${QNAMES[Q.mob]} <span class="qn">${q.n} / ${QN()}</span></div>`); else if (P.lv >= Q.req) rows.push(`<div class="qm qc" data-qc="mainNew">📜 <b>새 메인 의뢰</b><br><span class="qd">${giverName(Q)} · 눌러서 받기 ▸</span></div>`); else rows.push(`<div class="qm">📜 <b>다음 메인 의뢰</b><br>Lv ${Q.req}부터 받을 수 있어요</div>`); }
+  if (Q && Q.type === 'talk' && q.st === 'active') rows.push(`<div class="qm">📜 <b>${Q.title}</b><br>${talkWho(Q.to).name}에게 말 걸기 <span class="qgo" data-qgo="1">바로 이동 ▸</span></div>`);
+  else if (Q) { if (q.st === 'active') rows.push(q.n >= QN() ? `<div class="qm qc" data-qc="main">📜 <b>${Q.title}</b><br><span class="qd">완료! 눌러서 보상 받기 ▸</span></div>` : `<div class="qm">📜 <b>${Q.title}</b><br>${QNAMES[Q.mob]} <span class="qn">${q.n} / ${QN()}</span> <span class="qgo" data-qgo="1">바로 이동 ▸</span></div>`); else if (P.lv >= Q.req) rows.push(`<div class="qm qc" data-qc="mainNew">📜 <b>새 메인 의뢰</b><br><span class="qd">${giverName(Q)} · 눌러서 받기 ▸</span></div>`); else rows.push(`<div class="qm">📜 <b>다음 메인 의뢰</b><br>Lv ${Q.req}부터 받을 수 있어요</div>`); }
   const S2 = sqState(); for (const id in S2) { const s = S2[id], sq = SUBQ[id]; if (!sq || s.st !== 'active') continue; rows.push(s.n >= qNeed(sq) ? `<div class="qs qc" data-qc="${id}">◆ <b>${sq.title}</b><br><span class="qd">완료! 눌러서 보상 받기 ▸</span></div>` : `<div class="qs">◆ <b>${sq.title}</b><br>${qLabel(sq)} ${sq.type === 'deliver' ? '' : `<span class="qn">${s.n} / ${qNeed(sq)}</span>`}</div>`); }
   return rows.join('');
 }
@@ -2621,8 +2638,8 @@ function claimQuest(k) {
   if (k === 'main') { const q = qState(), Q = QUESTS[q.i]; if (!Q || q.st !== 'active' || q.n < QN()) return; openDialog(Q.done, [{ label: '보상 받기', fn: () => { questReward(); closeDialog(); } }], giverWho(Q)); return; }
   const q = SUBQ[k], s0 = sqState()[k]; if (!q || !s0 || s0.st !== 'active' || s0.n < qNeed(q)) return; openDialog(q.done, [{ label: '보상 받기', fn: () => { subReward(q); closeDialog(); } }], { name: SUBNPC[q.npc].name, img: SUBNPC[q.npc].img });
 }
-$('#qBody').addEventListener('click', e => { const t = e.target.closest('[data-qc]'); if (t) { e.stopPropagation(); claimQuest(t.dataset.qc); } });
-for (const ev of ['pointerdown', 'touchstart', 'mousedown']) $('#qBody').addEventListener(ev, e => { if (e.target.closest('[data-qc]')) e.stopPropagation(); }, { passive: true });
+$('#qBody').addEventListener('click', e => { if (e.target.closest('[data-qgo]')) { e.stopPropagation(); questWarp(); return; } const t = e.target.closest('[data-qc]'); if (t) { e.stopPropagation(); claimQuest(t.dataset.qc); } });
+for (const ev of ['pointerdown', 'touchstart', 'mousedown']) $('#qBody').addEventListener(ev, e => { if (e.target.closest('[data-qc],[data-qgo]')) e.stopPropagation(); }, { passive: true });
 { let fold = false; try { fold = localStorage.getItem('sf-qfold') === '1'; } catch (e) { } const qt = $('#qTrack'), tg = $('#qTog'); const set = () => { qt.classList.toggle('fold', fold); tg.textContent = fold ? '▸' : '◂'; tg.setAttribute('aria-label', fold ? '퀘스트 창 펼치기' : '퀘스트 창 접기'); }; set();
   for (const ev of ['pointerdown', 'touchstart', 'mousedown']) tg.addEventListener(ev, e => e.stopPropagation(), { passive: true });
   tg.addEventListener('click', e => { e.stopPropagation(); fold = !fold; try { localStorage.setItem('sf-qfold', fold ? '1' : '0'); } catch (er) { } set(); }); }
@@ -3847,7 +3864,7 @@ const AWAKEN = {
   swift: { name: '바람걸음', desc: '회피율 +5%' },
   power: { name: '광전사', desc: '치명타 피해 +25%' },
   vigor: { name: '불굴', desc: '받는 피해 -10%' },
-  haste: { name: '시간 가속', desc: '공격 속도 +15%' },
+  haste: { name: '시간 가속', desc: '모든 기술 재사용 대기시간 5% 추가 감소' },
   vamp: { name: '피의 군주', desc: '적을 처치할 때마다 생명력 0.5% 회복' },
   crit: { name: '암살자의 눈', desc: '치명타 피해 +30%' },
   magnet: { name: '황금 손', desc: '골드 획득 +30%' },
@@ -3898,7 +3915,7 @@ const SKILLS = {
   swift: { name: '이속 증가', type: '패시브', icon: '»', v: [8, 16, 24, 32, 40], desc(l) { return `이동 속도 +${pickL(this.v, l)}%`; } },
   power: { name: '괴력', type: '패시브', icon: '✊', v: [10, 20, 30, 40, 55], desc(l) { return `공격력 +${pickL(this.v, l)}% (모든 기술 피해도 함께 올라요)`; } },
   vigor: { name: '강인함', type: '패시브', icon: '✚', v: [12, 24, 36, 48, 60], desc(l) { return `최대 생명력 +${pickL(this.v, l)}%, 초당 생명력 재생 +${(l * 1.2).toFixed(1)}`; } },
-  haste: { name: '재빠른 손', type: '패시브', icon: '⧗', desc(l) { return `모든 기술 재사용 대기시간 -${Math.round(6 * Math.min(5, l) + 3 * Math.max(0, l - 5))}%, 공격 속도 +${l * 6}%`; } },
+  haste: { name: '재빠른 손', type: '패시브', icon: '⧗', desc(l) { return `모든 기술 재사용 대기시간 -${Math.round(4 * Math.min(5, l) + 2 * Math.max(0, l - 5))}%, 기본 공격 속도 +${l * 5}%${l >= SK_AW ? ' · 각성: 재사용 대기시간 5% 추가 감소' : ''}`; } },
   vamp: { name: '피의 갈증', type: '패시브', icon: '♥', v: [1.5, 3, 4.5, 6, 8], desc(l) { return `준 피해의 ${Math.round(pickL(this.v, l) * LS_MUL * 10) / 10}%만큼 생명력 흡수`; } },
   crit: { name: '급소 찌르기', type: '패시브', icon: '✦', desc(l) { return `치명타 확률 +${l * 5}%, 치명타 피해 +${l * 10}%`; } },
   magnet: { name: '손버릇', type: '패시브', icon: '⌘', desc(l) { return `골드·물약을 끌어당기는 거리 +${l * 45}, 골드 획득 +${l * 10}%`; } },
@@ -4222,7 +4239,7 @@ function wizGround() {
   for (const o of WZO) if (o.k === 'healbig') { const f = o.t / o.life, a = Math.sin(Math.min(1, f) * Math.PI); fxDraw('fx_heal', o.x, o.y + 6, o.r * 1.45 * (.75 + f * .3), 0, a * .85, .55); }
 }
 function wizDraw() {
-  for (const m of mobs) if (m.crackT && m.crackT > GT && m.hp > 0) { const k = Math.min(1, (m.crackT - GT) / 1), pu = .6 + Math.sin(GT * 8) * .25; ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = k * pu; ctx.strokeStyle = '#7fd8ff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(m.x, m.y + 6, m.r * 1.5, m.r * .5, 0, 0, TAU); ctx.stroke(); ctx.lineWidth = 2; for (let j = 0; j < 6; j++) { const a = j / 6 * TAU + 0.3; ctx.beginPath(); ctx.moveTo(m.x + Math.cos(a) * m.r * .4, m.y + 6 + Math.sin(a) * m.r * .14); ctx.lineTo(m.x + Math.cos(a + .25) * m.r * 1.5, m.y + 6 + Math.sin(a + .25) * m.r * .5); ctx.stroke(); } ctx.globalAlpha = k; ctx.font = 'bold 18px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#bfeeff'; ctx.fillText('❄', m.x, m.y - m.r * 2 - 30); ctx.restore(); }
+  for (const m of mobs) if (m.crackT && m.crackT > GT && m.hp > 0) { const k = Math.min(1, (m.crackT - GT) / 1), pu = .6 + Math.sin(GT * 8) * .25; ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = k * pu; ctx.strokeStyle = '#7fd8ff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(m.x, m.y + 6, m.r * 1.5, m.r * .5, 0, 0, TAU); ctx.stroke(); ctx.lineWidth = 2; for (let j = 0; j < 6; j++) { const a = j / 6 * TAU + 0.3; ctx.beginPath(); ctx.moveTo(m.x + Math.cos(a) * m.r * .4, m.y + 6 + Math.sin(a) * m.r * .14); ctx.lineTo(m.x + Math.cos(a + .25) * m.r * 1.5, m.y + 6 + Math.sin(a + .25) * m.r * .5); ctx.stroke(); } ctx.restore(); }
   if (FXI.fx_burnb) for (const m of mobs) if (m.wBurn && m.hp > 0 && m.wBurn.t > 0) { const fl = .85 + Math.sin(GT * 23 + m.x) * .1, w = Math.max(36, m.r * 2.8) * fl, a = Math.min(1, m.wBurn.t * 2) * (.95 + Math.sin(GT * 31 + m.y) * .05); fxDraw('fx_burnb', m.x, m.y - w * .62 * 1.9 / 2 + m.r * .4, w, 0, a, 1, w * 1.9 * (.92 + Math.sin(GT * 17) * .08)); }
   const t0 = GT;
   // 축복 오라 · 보호막
@@ -5712,7 +5729,7 @@ function updHud() {
   // 보스 바
   let boss = null; for (const m of mobs) if (m.boss && m.hp > 0 && Math.hypot(m.x - P.x, m.y - P.y) < 650) boss = m;
   const bb = $('#bossbar');
-  if (boss) { if (bb.hidden) { bb.hidden = false; HUD_GEO = 1; } const bn = bb.querySelector('.nm'), bt = `${boss.d.name} · Lv ${boss.lv}`; if (bn._t !== bt) { bn._t = bt; bn.textContent = bt; } setBar(bb.querySelector('.bar'), boss.hp, boss.maxHp, `${fmt(boss.hp)} / ${fmt(boss.maxHp)}`); }
+  if (boss) { if (bb.hidden) { bb.hidden = false; HUD_GEO = 1; } const bn = bb.querySelector('.nm'), ck = boss.crackT > GT ? Math.ceil(boss.crackT - GT) : 0, bt = `${boss.d.name} · Lv ${boss.lv}` + (ck ? '|' + ck : ''); if (bn._t !== bt) { bn._t = bt; bn.classList.toggle('ck', !!ck); bn.innerHTML = esc(ck ? boss.d.name : `${boss.d.name} · Lv ${boss.lv}`) + (ck ? ` <span class="crk" title="서리 균열: 받는 피해 +${Math.round(WZ_CRACK.v * 100)}%">❄+${Math.round(WZ_CRACK.v * 100)}% ${ck}s</span>` : ''); } setBar(bb.querySelector('.bar'), boss.hp, boss.maxHp, `${fmt(boss.hp)} / ${fmt(boss.maxHp)}`); }
   else if (!bb.hidden) { bb.hidden = true; HUD_GEO = 1; }
   const rb = $('#recallBar');
   if (P.recall > 0) { rb.hidden = false; setBar(rb.querySelector('.bar'), 1.6 - P.recall, 1.6); } else rb.hidden = true;
