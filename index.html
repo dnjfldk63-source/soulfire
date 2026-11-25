@@ -1106,13 +1106,13 @@ const setB6 = S0 => S0.b6 + (S0.cls6 && S0.cls6[P.cls] ? ' · ' + S0.cls6[P.cls]
 const SETS = {
   blood: { name: '학살자의 유산', raid: 'gorvak', col: '#ff6a5a',
     names: { weapon: '학살자의 도살칼', helm: '학살자의 뿔투구', armor: '학살자의 피갑옷', boots: '학살자의 쇠장화', ring: '핏빛 맹세 반지', amulet: '송곳니 목걸이' },
-    b3: '공격력 +15%, 생명력 흡수 +0.3%', b6: '공격 속도 +20%, 적을 처치할 때마다 생명력 1.5% 회복', cls6: { mik: '엔지니어: 자동 포탑이 한 번에 2개씩 (최대 +2개)', chae: '씨프: 그림자 분신 +1체, 기술 피해 +15%' } },
+    b3: '공격력 +15%, 생명력 흡수 +0.3%', b6: '공격 속도 +20%, 적을 처치할 때마다 생명력 1.5% 회복', cls6: { mik: '엔지니어: 자동 포탑이 한 번에 2개씩 (최대 +2개)', chae: '씨프: 그림자 분신 +1체, 기술 피해 +15%', min: '위자드: 생명의 순환 재사용 대기시간 -30%, 회복량 +5%' } },
   frost: { name: '서리 여왕의 의복', raid: 'isbela', col: '#8fdcff',
     names: { weapon: '서리 왕홀 단검', helm: '얼음 왕관', armor: '서리 비단 로브', boots: '눈보라 장화', ring: '빙결의 반지', amulet: '겨울 심장 목걸이' },
-    b3: '생명력 +20%, 방어력 +25', b6: '받는 피해 -20%, 맞으면 25% 확률로 주변 적 빙결', cls6: { mik: '엔지니어: 화염 방사기가 아이스 방사기로 (피해 +30%, 빙결)', chae: '씨프: 그림자 걸음 연타 +3회, 기술 피해 +15%' } },
+    b3: '생명력 +20%, 방어력 +25', b6: '받는 피해 -20%, 맞으면 25% 확률로 주변 적 빙결', cls6: { mik: '엔지니어: 화염 방사기가 아이스 방사기로 (피해 +30%, 빙결)', chae: '씨프: 그림자 걸음 연타 +3회, 기술 피해 +15%', min: '위자드: 빙하 낙하 고드름 +4개, 각성 없이도 빙결이 2배로 쌓여요, 마법 피해 +15%' } },
   abyss: { name: '선봉장의 권능', raid: 'abyss', col: '#c86aff',
     names: { weapon: '심연의 송곳니', helm: '선봉장의 뿔관', armor: '심연 흑요갑', boots: '재의 발걸음', ring: '심연의 인장', amulet: '그라무르의 심장' },
-    b3: '치명타 확률 +10%, 치명타 피해 +40%', b6: '공격력 +25%, 치명타 시 12% 확률로 메테오 낙하', cls6: { mik: '엔지니어: 지뢰가 블랙홀로 (빨아들인 뒤 대폭발)', chae: '씨프: 부채 단검을 두 번 던져요' } },
+    b3: '치명타 확률 +10%, 치명타 피해 +40%', b6: '공격력 +25%, 치명타 시 12% 확률로 메테오 낙하', cls6: { mik: '엔지니어: 지뢰가 블랙홀로 (빨아들인 뒤 대폭발)', chae: '씨프: 부채 단검을 두 번 던져요', min: '위자드: 화염구 +3개, 화염구 속도 +50%' } },
 };
 const SET_LOOK = { blood: { rgb: '255,90,74', f: 'hue-rotate(-25deg) saturate(1.7)' }, frost: { rgb: '120,210,255', f: 'hue-rotate(180deg) saturate(1.3)' }, abyss: { rgb: '190,100,255', f: 'hue-rotate(250deg) saturate(1.5)' } };
 const ihex = it => it && it.set ? SETS[it.set].col : RAR[it ? it.r : 0].hex;
@@ -1309,7 +1309,8 @@ function calc() {
 }
 
 // 주 피해 능력치: 위자드는 마력(마법 피해), 나머지는 공격력(물리 피해)
-const PW = () => P.cls === 'min' ? S.mag : S.atk;
+const wizSet = k => P.cls === 'min' && !!(S.setFx && S.setFx[k]);
+const PW = () => P.cls === 'min' ? S.mag * (1 + (wizSet('frost6') ? .15 : 0)) : S.atk;
 // 종합 전투력: 공격(공격력·치명·공속) × 생존(생명력·방어·회피) 기하평균 + 흡혈·재생·이속·기술 보정
 // 전투력: 능력치별 점수를 더한다 (공격 비중 크게, 생명력은 1000당 100)
 function combatPower(s = S) {
@@ -1517,7 +1518,7 @@ function showRaidResult() {
   el.querySelector('.rr-boss').textContent = B.name;
   el.querySelector('.rr-stats').innerHTML = `<div><span>클리어 시간</span><b>${f(tm)}</b></div><div><span>물약 사용</span><b>${RAID.pots}개</b></div><div><span>부활석 사용</span><b>${RAID.revives} / 3</b></div><div><span>광폭화</span><b>${tm > R.enr ? '×' + RAID.mult + ' 까지 버팀' : '들어가기 전 처치'}</b></div><div><span>최고 랭크</span><b>${P.rrank[R.boss]}</b></div>`;
   { const D = DMGLOG || {}, d0 = RAID.dlog0 || {}, rows = Object.keys(D).map(k => [k, D[k] - (d0[k] || 0)]).filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]), tot = rows.reduce((a, x) => a + x[1], 0) || 1;
-    const nm = k => k === 'basic' ? '기본 공격' : k === 'poison' ? '독' : SKILLS[k] ? SKILLS[k].name : k;
+    const nm = k => k === 'basic' ? '기본 공격' : k === 'poison' ? '독' : k === 'wBurn' ? '푸른 화상' : SKILLS[k] ? SKILLS[k].name : k;
     el.querySelector('.rr-dmg').innerHTML = `<div class="lbl">기술별 피해 · 총 ${fmt(tot)} (초당 ${fmt(tot / Math.max(1, tm))})</div>` + rows.map(([k, v]) => `<div class="rd"><span>${nm(k)}</span><i style="width:${(v / rows[0][1] * 100).toFixed(1)}%"></i><b>${Math.round(v / tot * 100)}% · ${fmt(v / Math.max(1, tm))}/s</b></div>`).join(''); }
   el.hidden = false; el.classList.remove('play'); void el.offsetWidth; el.classList.add('play');
 }
@@ -3813,7 +3814,7 @@ function gainXp(v) {
 }
 // 스킬·자동 공격 목표는 세로 폰 화면에 보이는 범위 안의 적만 (가로 ±230, 세로 ±420)
 const VIEW_HX = 230, VIEW_HY = 420;
-function inView(m) { const vw = W / SCALE, vh = H / SCALE, mx = 34, top = TOUCH ? 70 : 50, bot = TOUCH ? 120 : 60; return Math.abs(m.x - P.x) < VIEW_HX && Math.abs(m.y - P.y) < VIEW_HY && m.x > CAM.x + mx && m.x < CAM.x + vw - mx && m.y > CAM.y + top && m.y < CAM.y + vh - bot; }
+function inView(m) { const vw = W / SCALE, vh = H / SCALE; if (P.cls === 'min') { const o = 70; return Math.abs(m.x - P.x) < 340 && Math.abs(m.y - P.y) < 480 && m.x > CAM.x - o && m.x < CAM.x + vw + o && m.y > CAM.y - o && m.y < CAM.y + vh + o; } const mx = 34, top = TOUCH ? 70 : 50, bot = TOUCH ? 120 : 60; return Math.abs(m.x - P.x) < VIEW_HX && Math.abs(m.y - P.y) < VIEW_HY && m.x > CAM.x + mx && m.x < CAM.x + vw - mx && m.y > CAM.y + top && m.y < CAM.y + vh - bot; }
 function nearestMob(range) {
   let best = null, bd = range;
   for (const m of mobs) { if (m.hp <= 0 || !inView(m)) continue; const d = Math.hypot(m.x - P.x, m.y - P.y) - m.r; if (d < bd) { bd = d; best = m; } }
@@ -4093,7 +4094,7 @@ function wizBoom(x, y, dmg, skip) {
   for (const m of mobs) if (m !== skip && m.hp > 0 && Math.hypot(m.x - x, m.y - y) < 90 + m.r) damageMob(m, dmg * .6, false, false, .8);
 }
 function wizBuffApply(v) { P.wBuff = { t: v.d, a: v.a, s: v.s, aw: !!v.aw }; calc(); WZO.push({ k: 'cast', id: 0, t: 0, life: .8, col: v.aw ? '255,120,60' : '255,210,110' }); addText(P.x, P.y - 70, '축복', v.aw ? '#ff9a5a' : '#ffd27a', 15); }
-const HEAL_MAG = .2; // 마력 1당 추가 회복량
+const HEAL_MAG = .2, WZ_BURN = .2; // 마력 1당 추가 회복량
 function wizHealMe(pct, shieldPct, mine, flat) {
   if (P.dead) return; const v = Math.round(S.maxHp * pct + (flat || 0)); P.hp = Math.min(S.maxHp, P.hp + v);
   addText(P.x + rand(-6, 6), P.y - 60, '+' + fmt(v), '#7dff9a', 15); WZO.push({ k: 'heal', id: 0, t: 0, life: 1 });
@@ -4113,24 +4114,24 @@ const WIZ_SKILLS = {
     n: [3, 4, 5, 6, 7], m: [.95, 1.08, 1.22, 1.38, 1.56], cdv: [2.6, 2.4, 2.2, 2, 1.8],
     desc(l) { return `가까운 적에게 번개를 내리꽂아 주변 적에게 ${Math.round(pickL(this.n, l))}번 튕겨요. 한 번에 마력의 ${pct(pickL(this.m, l))} 마법 피해 (튕길 때마다 8%씩 약해져요).${l >= SK_AW ? ' 각성: 붉은 번개가 두 줄기로 — 가장 먼 적과 가장 가까운 적에게 동시에 떨어져요.' : ''} ${pickL(this.cdv, l)}초마다`; },
     cd(l) { return pickL(this.cdv, l); },
-    cast(l) { const near = nearestMob(420); if (!near) return false; const n = Math.round(pickL(this.n, l)), dmg = PW() * pickL(this.m, l), aw = l >= SK_AW; P.face = Math.atan2(near.y - P.y, near.x - P.x);
+    cast(l) { const near = nearestMob(560); if (!near) return false; const n = Math.round(pickL(this.n, l)), dmg = PW() * pickL(this.m, l), aw = l >= SK_AW; P.face = Math.atan2(near.y - P.y, near.x - P.x);
       wizChain(near, n, dmg, aw);
-      if (aw) { let far = null, fd = 0; for (const m of mobs) { if (m.hp <= 0 || m === near || m.air || !inView(m)) continue; const d = Math.hypot(m.x - P.x, m.y - P.y); if (d < 470 && d > fd) { fd = d; far = m; } } if (far) wizChain(far, n, dmg, true); }
+      if (aw) { let far = null, fd = 0; for (const m of mobs) { if (m.hp <= 0 || m === near || m.air || !inView(m)) continue; const d = Math.hypot(m.x - P.x, m.y - P.y); if (d < 600 && d > fd) { fd = d; far = m; } } if (far) wizChain(far, n, dmg, true); }
       SFX.zap(aw); shake = Math.max(shake, aw ? 4 : 2); } },
   wFire: { cls: 'min', name: '화염구', type: '액티브', icon: '☄', img: 'ic_fire',
-    n: [1, 3, 5, 8, 10], m: [1.7, 1.55, 1.45, 1.38, 1.34], cdv: [3, 2.9, 2.8, 2.7, 2.6],
-    desc(l) { const n = Math.round(pickL(this.n, l)); return `${n >= 8 ? '사방으로' : '앞으로'} 퍼지는 유도 화염구 ${n}개를 날려요. 적에게 휘어 들어가며 (적이 한 마리면 전부 그 적에게) 맞은 적에게 마력의 ${pct(pickL(this.m, l))} 마법 피해.${l >= SK_AW ? ' 각성: 맞으면 폭발해 주변 적에게도 60% 마법 피해.' : ''} ${pickL(this.cdv, l)}초마다`; },
+    n: [1, 3, 5, 8, 10], m: [1.87, 1.7, 1.6, 1.52, 1.47], cdv: [3, 2.9, 2.8, 2.7, 2.6],
+    desc(l) { const n = Math.round(pickL(this.n, l)) + (wizSet('abyss6') ? 3 : 0); return `${n >= 8 ? '사방으로' : '앞으로'} 퍼지는 유도 화염구 ${n}개를 날려요. 적에게 휘어 들어가며 (적이 한 마리면 전부 그 적에게) 맞은 적에게 마력의 ${pct(pickL(this.m, l))} 마법 피해.${l >= SK_AW ? ' 각성: 푸른 불꽃으로 바뀌어 맞은 적을 3초 동안 태워요 (0.5초마다 마력의 ' + pct(pickL(this.m, l) * WZ_BURN) + ' 마법 피해).' : ''} 벽을 뚫고 날아가요. ${pickL(this.cdv, l)}초마다${wizSet('abyss6') ? ' · 🕳 선봉장 세트: 화염구 +3, 속도 +50%' : ''}`; },
     cd(l) { return pickL(this.cdv, l); },
-    cast(l) { const t = nearestMob(460); if (!t) return false; const n = Math.round(pickL(this.n, l)), a0 = Math.atan2(t.y - P.y, t.x - P.x), dmg = PW() * pickL(this.m, l), aw = l >= SK_AW; P.face = a0;
-      const ts = mobs.filter(m => m.hp > 0 && !m.air && inView(m) && Math.hypot(m.x - P.x, m.y - P.y) < 520).sort((a, b) => Math.hypot(a.x - P.x, a.y - P.y) - Math.hypot(b.x - P.x, b.y - P.y)).slice(0, n);
-      for (let k = 0; k < n; k++) { const a = n >= 8 ? a0 + k / n * TAU : a0 + (n > 1 ? (k / (n - 1) - .5) * (n >= 5 ? 1.6 : 1) : 0), sp = 330; WZO.push({ k: 'fb', x: P.x + Math.cos(a) * 18, y: P.y - 24 + Math.sin(a) * 18, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, t: -k * .03, life: 2.2, dmg, aw, tg: ts[k % ts.length] }); }
+    cast(l) { const t = nearestMob(600); if (!t) return false; const n = Math.round(pickL(this.n, l)) + (wizSet('abyss6') ? 3 : 0), a0 = Math.atan2(t.y - P.y, t.x - P.x), dmg = PW() * pickL(this.m, l), aw = l >= SK_AW, fsp = wizSet('abyss6') ? 1.5 : 1; P.face = a0;
+      const ts = mobs.filter(m => m.hp > 0 && !m.air && inView(m) && Math.hypot(m.x - P.x, m.y - P.y) < 640).sort((a, b) => Math.hypot(a.x - P.x, a.y - P.y) - Math.hypot(b.x - P.x, b.y - P.y)).slice(0, n);
+      for (let k = 0; k < n; k++) { const a = n >= 8 ? a0 + k / n * TAU : a0 + (n > 1 ? (k / (n - 1) - .5) * (n >= 5 ? 1.6 : 1) : 0), sp = 330 * fsp; WZO.push({ k: 'fb', fsp, x: P.x + Math.cos(a) * 18, y: P.y - 24 + Math.sin(a) * 18, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, t: -k * .03, life: 2.6, dmg, aw, tg: ts[k % ts.length] }); }
       SFX.fball(); } },
   wIce: { cls: 'min', name: '빙하 낙하', type: '액티브', icon: '❄', img: 'ic_ice',
     tg: [1, 2, 3, 4, 5], c: [6, 7, 8, 10, 12], m: [.52, .58, .64, .7, .78], cdv: [3.4, 3.2, 3, 2.8, 2.6],
-    desc(l) { const aw = l >= SK_AW; return `적 ${Math.round(pickL(this.tg, l))}마리 머리 위로 고드름·우박 ${Math.round(pickL(this.c, l))}개를 떨어뜨려요 (적이 적으면 한 마리에게 우수수). 한 개당 마력의 ${pct(pickL(this.m, l) * (aw ? 1.25 : 1))} 마법 피해, 맞은 적은 잠시 느려져요.${aw ? ' 각성: 맞을 때마다 빙결이 쌓이고, 5번 쌓이면 1초 동안 꽁꽁 얼어붙어요. 피해 +25%.' : ''} ${pickL(this.cdv, l)}초마다`; },
+    desc(l) { const aw = l >= SK_AW; return `적 ${Math.round(pickL(this.tg, l))}마리 머리 위로 고드름·우박 ${Math.round(pickL(this.c, l)) + (wizSet('frost6') ? 4 : 0)}개를 떨어뜨려요 (적이 적으면 한 마리에게 우수수). 한 개당 마력의 ${pct(pickL(this.m, l) * (aw ? 1.25 : 1))} 마법 피해, 맞은 적은 잠시 느려져요.${aw ? ' 각성: 맞을 때마다 빙결이 쌓이고, 5번 쌓이면 1초 동안 꽁꽁 얼어붙어요. 피해 +25%.' : ''} ${pickL(this.cdv, l)}초마다${wizSet('frost6') ? ' · ❄ 서리 여왕 세트: 고드름 +4, 빙결 2배' : ''}`; },
     cd(l) { return pickL(this.cdv, l); },
-    cast(l) { const ts = mobs.filter(m => m.hp > 0 && !m.air && inView(m) && Math.hypot(m.x - P.x, m.y - P.y) < 460).sort((a, b) => Math.hypot(a.x - P.x, a.y - P.y) - Math.hypot(b.x - P.x, b.y - P.y)).slice(0, Math.round(pickL(this.tg, l))); if (!ts.length) return false;
-      const c = Math.round(pickL(this.c, l)), aw = l >= SK_AW, dmg = PW() * pickL(this.m, l) * (aw ? 1.25 : 1);
+    cast(l) { const ts = mobs.filter(m => m.hp > 0 && !m.air && inView(m) && Math.hypot(m.x - P.x, m.y - P.y) < 600).sort((a, b) => Math.hypot(a.x - P.x, a.y - P.y) - Math.hypot(b.x - P.x, b.y - P.y)).slice(0, Math.round(pickL(this.tg, l))); if (!ts.length) return false;
+      const c = Math.round(pickL(this.c, l)) + (wizSet('frost6') ? 4 : 0), aw = l >= SK_AW, dmg = PW() * pickL(this.m, l) * (aw ? 1.25 : 1);
       for (let k = 0; k < c; k++) { const m = ts[k % ts.length]; WZO.push({ k: 'ice', m, ox: rand(-20, 20), oy: rand(-10, 10), x: m.x, y: m.y, t: -k * .07, fall: .32, dmg, aw, big: Math.random() < .45 }); }
       SFX.icek(); } },
   wRevive: { cls: 'min', name: '부활의 종', type: '지원', icon: '✚', img: 'ic_revive',
@@ -4151,9 +4152,9 @@ const WIZ_SKILLS = {
       for (const o of party) { o.buffT = v.d; o.buffAw = v.aw; } SFX.powup(); } },
   wHeal: { cls: 'min', name: '생명의 순환', type: '지원', icon: '❦', img: 'ic_heal',
     h: [.05, .06, .07, .08, .09], m: [1.3, 1.5, 1.7, 1.9, 2.1], cdv: [6, 5.6, 5.2, 4.8, 4.4],
-    desc(l) { const aw = l >= SK_AW; return `커다란 초록 생명의 빛을 터뜨려 나와 주변 동료의 생명력을 ${pct(pickL(this.h, l))} + 마력의 ${Math.round(HEAL_MAG * 100)}% 채워요. 빛 안에 있는 적들은 붉게 물들며 각각 마력의 ${pct(pickL(this.m, l))} 피해를 받아요.${aw ? ' 각성: 재사용 대기시간 30% 감소, 회복한 동료에게 4초 동안 보호막(최대 생명력 12%).' : ''} ${(pickL(this.cdv, l) * (aw ? .7 : 1)).toFixed(1)}초마다`; },
-    cd(l) { return pickL(this.cdv, l) * (l >= SK_AW ? .7 : 1); },
-    cast(l) { const aw = l >= SK_AW, h = pickL(this.h, l), party = wizParty(false).filter(o => Math.hypot(o.x - P.x, o.y - P.y) < 520), t = nearestMob(200), hurt = P.hp < S.maxHp * .97, fl = Math.round(S.mag * HEAL_MAG);
+    desc(l) { const aw = l >= SK_AW; return `커다란 초록 생명의 빛을 터뜨려 나와 주변 동료의 생명력을 ${pct(pickL(this.h, l) + (wizSet('blood6') ? .05 : 0))} + 마력의 ${Math.round(HEAL_MAG * 100)}% 채워요. 빛 안에 있는 적들은 붉게 물들며 각각 마력의 ${pct(pickL(this.m, l))} 피해를 받아요.${aw ? ' 각성: 재사용 대기시간 30% 감소, 회복한 동료에게 4초 동안 보호막(최대 생명력 12%).' : ''} ${(this.cd(l)).toFixed(1)}초마다${wizSet('blood6') ? ' · 🩸 학살자 세트: 재사용 대기시간 -30%, 회복량 +5%' : ''}`; },
+    cd(l) { return pickL(this.cdv, l) * (l >= SK_AW ? .7 : 1) * (wizSet('blood6') ? .7 : 1); },
+    cast(l) { const aw = l >= SK_AW, h = pickL(this.h, l) + (wizSet('blood6') ? .05 : 0), party = wizParty(false).filter(o => Math.hypot(o.x - P.x, o.y - P.y) < 520), t = nearestMob(200), hurt = P.hp < S.maxHp * .97, fl = Math.round(S.mag * HEAL_MAG);
       if (!t && !hurt && !party.length) return false;
       wizHealMe(h, aw ? .12 : 0, true, fl);
       if (party.length) { netSend({ t: 'sup', k: 'heal', to: party.map(o => o.id), v: Math.round(h * 100), s: aw ? 12 : 0, f: fl }); for (const o of party) WZO.push({ k: 'heal', id: o.id, t: 0, life: 1 }); }
@@ -4165,7 +4166,7 @@ const WIZ_SKILLS = {
 };
 const WIZ_AWAKEN = {
   wLight: { name: '붉은 쌍번개', desc: '붉은 번개가 두 줄기로 — 가장 먼 적과 가장 가까운 적에게 동시에 떨어져요' },
-  wFire: { name: '폭염구', desc: '화염구가 맞으면 폭발해 주변 적에게도 피해를 줘요' },
+  wFire: { name: '푸른 업화', desc: '화염구가 푸른 불꽃으로 바뀌어 맞은 적을 3초 동안 태워요 (화상 도트 피해)' },
   wIce: { name: '절대 영도', desc: '빙결이 5번 쌓이면 1초 동안 얼어붙고, 피해가 25% 늘어요' },
   wRevive: { name: '천상의 종', desc: '일어난 동료가 생명력을 가득 채우고 3초 동안 무적이에요' },
   wBuff: { name: '전장의 찬가', desc: '재사용 대기시간 15% 감소와 공격 속도 +20%가 더해져요' },
@@ -4181,17 +4182,17 @@ function wizTick(dt) {
     if (o.k === 'fb') {
       if (o.t < 0) continue;
       if (!o.tg || o.tg.hp <= 0) { let b = null, bd = 600; for (const m of mobs) { if (m.hp <= 0 || m.air) continue; const d = Math.hypot(m.x - o.x, m.y - o.y); if (d < bd) { bd = d; b = m; } } o.tg = b; }
-      { const sp0 = Math.hypot(o.vx, o.vy), sp = Math.min(760, sp0 + 900 * dt); if (o.tg && o.t > .12) { const ta = Math.atan2(o.tg.y - o.tg.r * .4 - o.y, o.tg.x - o.x), ca = Math.atan2(o.vy, o.vx); let da = ((ta - ca + Math.PI * 3) % TAU) - Math.PI; const turn = Math.min(Math.abs(da), (4 + o.t * 8) * dt) * Math.sign(da); o.vx = Math.cos(ca + turn) * sp; o.vy = Math.sin(ca + turn) * sp; } else { o.vx = o.vx / sp0 * sp; o.vy = o.vy / sp0 * sp; } }
-      o.x += o.vx * dt; o.y += o.vy * dt; if (Math.random() < .7) fx.push({ x: o.x + rand(-4, 4), y: o.y + rand(-4, 4), vx: rand(-25, 25), vy: rand(-35, 0), t: 0, life: rand(.2, .45), col: Math.random() < .5 ? '#ff7a1a' : '#ffd05a', size: rand(2, 4.5) });
-      if (o.t > o.life || wallAt(o.x, o.y)) { o.done = 1; if (o.aw) wizBoom(o.x, o.y, o.dmg); continue; }
-      for (const m of mobs) if (m.hp > 0 && !m.air && Math.hypot(m.x - o.x, m.y - m.r * .4 - o.y) < m.r + 12) { o.done = 1; damageMob(m, o.dmg, true, false, .8); if (o.aw) wizBoom(o.x, o.y, o.dmg, m); else { addSfx('fx_fireboom', o.x, o.y, 80, .32, { rot: rand(-.3, .3), g0: .5, g1: 1.1, a: .85 }); burst(o.x, o.y, '#ff8a2a', 8, 140, .4, 3); } break; }
+      { const sp0 = Math.hypot(o.vx, o.vy), sp = Math.min(760 * (o.fsp || 1), sp0 + 900 * (o.fsp || 1) * dt); if (o.tg && o.t > .12) { const ta = Math.atan2(o.tg.y - o.tg.r * .4 - o.y, o.tg.x - o.x), ca = Math.atan2(o.vy, o.vx); let da = ((ta - ca + Math.PI * 3) % TAU) - Math.PI; const turn = Math.min(Math.abs(da), (4 + o.t * 8) * dt) * Math.sign(da); o.vx = Math.cos(ca + turn) * sp; o.vy = Math.sin(ca + turn) * sp; } else { o.vx = o.vx / sp0 * sp; o.vy = o.vy / sp0 * sp; } }
+      o.x += o.vx * dt; o.y += o.vy * dt; if (Math.random() < .7) fx.push({ x: o.x + rand(-4, 4), y: o.y + rand(-4, 4), vx: rand(-25, 25), vy: rand(-35, 0), t: 0, life: rand(.2, .45), col: o.aw ? (Math.random() < .5 ? '#3a8cff' : '#9fe0ff') : Math.random() < .5 ? '#ff7a1a' : '#ffd05a', size: rand(2, 4.5) });
+      if (o.t > o.life) { o.done = 1; continue; }
+      for (const m of mobs) if (m.hp > 0 && !m.air && Math.hypot(m.x - o.x, m.y - m.r * .4 - o.y) < m.r + 12) { o.done = 1; DSRC = 'wFire'; damageMob(m, o.dmg, true, false, .8); if (o.aw) { m.wBurn = { t: 3, tick: .5, d: Math.max(m.wBurn && m.wBurn.t > 0 ? m.wBurn.d : 0, o.dmg * WZ_BURN) }; burst(o.x, o.y, '#5aa8ff', 10, 150, .45, 3); } else { addSfx('fx_fireboom', o.x, o.y, 80, .32, { rot: rand(-.3, .3), g0: .5, g1: 1.1, a: .85 }); burst(o.x, o.y, '#ff8a2a', 8, 140, .4, 3); } DSRC = null; break; }
     } else if (o.k === 'ice') {
       if (!o.hitDone && o.m && o.m.hp > 0) { o.x = o.m.x + o.ox; o.y = o.m.y + o.oy; }
       if (o.t >= o.fall && !o.hitDone) {
         o.hitDone = 1; const m = o.m;
         if (m && m.hp > 0) {
-          damageMob(m, o.dmg, true, false, 0); m.slow = Math.max(m.slowT > 0 ? m.slow || 0 : 0, .3); m.slowT = 1.5;
-          if (o.aw) { m.frost = (m.frost || 0) + 1; if (m.frost >= 5) { m.frost = 0; if (m.boss) { m.slow = .7; m.slowT = 1.2; } else { m.frz = 1; m.kbx = m.kby = 0; } addText(m.x, m.y - m.r - 20, '빙결!', '#9fe8ff', 15); addSfx('fx_frost', m.x, m.y - m.r * .3, m.r * 5, .55, { g0: .5, g1: 1.25, a: .95 }); } }
+          DSRC = 'wIce'; damageMob(m, o.dmg, true, false, 0); DSRC = null; m.slow = Math.max(m.slowT > 0 ? m.slow || 0 : 0, .3); m.slowT = 1.5;
+          if (o.aw || wizSet('frost6')) { m.frost = (m.frost || 0) + (wizSet('frost6') ? 2 : 1); if (m.frost >= 5) { m.frost = 0; if (m.boss) { m.slow = .7; m.slowT = 1.2; } else { m.frz = 1; m.kbx = m.kby = 0; } addText(m.x, m.y - m.r - 20, '빙결!', '#9fe8ff', 15); addSfx('fx_frost', m.x, m.y - m.r * .3, m.r * 5, .55, { g0: .5, g1: 1.25, a: .95 }); } }
           burst(m.x + o.ox * .5, m.y - m.r * .4, '#cfefff', 7, 130, .4, 2.5); SFX.icek(1);
         }
       }
@@ -4199,6 +4200,7 @@ function wizTick(dt) {
     } else if (o.t > o.life) o.done = 1;
     if ((o.k === 'heal' || o.k === 'pillar') && o.t < o.life * .7 && Math.random() < dt * 30) { const p = wizPos(o); if (p) fx.push({ x: p.x + rand(-22, 22), y: p.y + rand(-4, 10), vx: rand(-8, 8), vy: -rand(40, 90), t: 0, life: rand(.5, 1), col: o.k === 'heal' ? (Math.random() < .7 ? '#7dff9a' : '#e8ffb0') : (Math.random() < .6 ? '#ffe9a0' : '#fff'), size: rand(1.5, 3.2) }); }
   }
+  for (const m of mobs) if (m.wBurn && m.hp > 0) { const b = m.wBurn; b.t -= dt; b.tick -= dt; if (b.tick <= 0 && b.t > -.01) { b.tick = .5; const k0 = SFXK; SFXK = 'mute'; DSRC = 'wBurn'; damageMob(m, b.d, false, false, 0); DSRC = null; SFXK = k0; if (Math.random() < .8) burst(m.x + rand(-6, 6), m.y - m.r * .5, '#4a9cff', 5, 70, .4, 2.5); } if (b.t <= 0) m.wBurn = null; else if (Math.random() < dt * 14) fx.push({ x: m.x + rand(-m.r * .6, m.r * .6), y: m.y - rand(0, m.r), vx: rand(-8, 8), vy: -rand(30, 60), t: 0, life: rand(.3, .6), col: Math.random() < .5 ? '#3a8cff' : '#bfe8ff', size: rand(2, 3.5) }); }
   for (let i = WZO.length - 1; i >= 0; i--) if (WZO[i].done) WZO.splice(i, 1);
 }
 function wizPos(o) { if (o.id === 0 || o.id == null) return o.x != null && o.k !== 'heal' && o.k !== 'pillar' && o.k !== 'cast' ? o : P; const q = NET.others.get(o.id); return q && q.map === CUR ? q : null; }
@@ -4232,7 +4234,7 @@ function wizDraw() {
       const [fx0, fy0] = o.pts[1] || o.pts[0]; const im = FXI.bolt && (red ? filtImg(FXI.bolt, 'bolt', 'hue-rotate(150deg) saturate(3) brightness(1.1)') : FXI.bolt);
       if (im) { ctx.globalAlpha = k; const h = 150, w = h * im.width / im.height; ctx.drawImage(im, fx0 - w / 2, fy0 - h + 10, w, h); ctx.globalAlpha = 1; }
     } else if (o.k === 'hit') { const im = FXI.shock && (o.red ? filtImg(FXI.shock, 'shock', 'hue-rotate(150deg) saturate(3)') : FXI.shock); if (im) { ctx.globalAlpha = k; const w = 70 * (1.4 - k * .4), h = w * im.height / im.width; ctx.drawImage(im, o.x - w / 2, o.y - h / 2, w, h); ctx.globalAlpha = 1; } const g = ctx.createRadialGradient(o.x, o.y, 0, o.x, o.y, 30); g.addColorStop(0, o.red ? `rgba(255,140,110,${.9 * k})` : `rgba(220,235,255,${.9 * k})`); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(o.x, o.y, 30, 0, TAU); ctx.fill(); }
-    else if (o.k === 'fb') { if (o.t < 0) continue; if (!fxDraw('fireball', o.x, o.y, 62, Math.atan2(o.vy, o.vx) + FB_ROT, 1)) { const g = ctx.createRadialGradient(o.x, o.y, 0, o.x, o.y, 16); g.addColorStop(0, '#fff2c0'); g.addColorStop(.5, '#ff8a2a'); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(o.x, o.y, 16, 0, TAU); ctx.fill(); } }
+    else if (o.k === 'fb') { if (o.t < 0) continue; if (o.aw && FXI.fireball && !FXI.fireball_b) FXI.fireball_b = filtImg(FXI.fireball, 'fbb', 'hue-rotate(190deg) saturate(1.5) brightness(1.15)'); if (!fxDraw(o.aw ? 'fireball_b' : 'fireball', o.x, o.y, 62, Math.atan2(o.vy, o.vx) + FB_ROT, 1)) { const g = ctx.createRadialGradient(o.x, o.y, 0, o.x, o.y, 16); g.addColorStop(0, '#fff2c0'); g.addColorStop(.5, o.aw ? '#3a8cff' : '#ff8a2a'); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(o.x, o.y, 16, 0, TAU); ctx.fill(); } }
     else if (o.k === 'ice') { if (o.t < 0) continue; if (!o.hitDone) { const f = Math.min(1, o.t / o.fall), y = o.y - 40 - 190 * (1 - f) * (1 - f); const sz = o.big ? 26 : 18, ih = FXI.fx_icicle ? sz * FXI.fx_icicle.height / FXI.fx_icicle.width : sz * 3; if (!fxDraw('fx_icicle', o.x, y - ih / 2, sz, 0, .95)) { ctx.fillStyle = '#cfefff'; ctx.beginPath(); ctx.moveTo(o.x, y); ctx.lineTo(o.x - 5, y - sz); ctx.lineTo(o.x + 5, y - sz); ctx.fill(); } }
       else { const f = (o.t - o.fall) / .4; fxDraw('fx_frost', o.x, o.y - 10, (o.big ? 80 : 56) * (.7 + f * .6), o.ox, (1 - f) * .9, .7); } }
     else if (o.k === 'heal') { const p = wizPos(o); if (!p) continue; const f = o.t / o.life; fxDraw('fx_heal', p.x, p.y + 8, 92 * (.6 + f * .5), f, Math.sin(f * Math.PI) * .9, .5); const g = ctx.createRadialGradient(p.x, p.y - 30, 0, p.x, p.y - 30, 50); g.addColorStop(0, `rgba(120,255,150,${.35 * (1 - f)})`); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y - 30, 50, 0, TAU); ctx.fill(); }
@@ -4274,14 +4276,15 @@ function hurtAlly(a, dmg) {
 const inTown = () => CUR === 'main' && !RAID && !HOUSE && (zoneAt(P.x, P.y) === 0 || Math.hypot((P.x / TS - POND.tx) / (POND.rx + 3.5), (P.y / TS - POND.ty) / (POND.ry + 5)) < 1);
 function skillTick(dt) {
   if (P.dead) return;
-  const near = nearestMob(520), town = inTown();
+  const near = nearestMob(P.cls === 'min' ? 600 : 520), town = inTown();
   for (const id of Object.keys(P.sk || {})) {
     const sk = SKILLS[id], l = P.sk[id]; if (!sk || !sk.cast || town) continue;
     if (id === 'tStep' && P.stepOff) continue;
     P.skT[id] = (P.skT[id] == null ? .4 : P.skT[id]) - dt * (P.stealthT > 0 && P.stealthAw ? 1.25 : 1);
     if (P.skT[id] > 0) continue;
     if (id !== 'proxy' && id !== 'wRevive' && id !== 'wHeal' && !near && !(id === 'wBuff' && (RAID || nearestMob(900)))) { P.skT[id] = .25; continue; }
-    P.skT[id] = sk.cast(l) === false ? .3 : sk.cd(l) * (S.cdr || 1) * (1 - Math.min(40, S.cdrp || 0) / 100);
+    DSRC = id; const cr = sk.cast(l); DSRC = null;
+    P.skT[id] = cr === false ? .3 : sk.cd(l) * (S.cdr || 1) * (1 - Math.min(40, S.cdrp || 0) / 100);
   }
   const ol = skLv('orbit');
   if (ol) {
@@ -4407,15 +4410,16 @@ function reapNova() {
 }
 function tryAttack(aim) {
   if (P.atkT > 0 || P.dead) return;
+  if (P.cls === 'min' && inTown()) return;
   if (S.powers.reap) { P.reapN = (P.reapN || 0) + 1; if (P.reapN % 4 === 0) reapNova(); }
   P.atkT = .5 / (1 + (S.aspd + hasteMul()) / 100);
   P.atkA = 0; P.atkDur = clamp(P.atkT * .9, .2, .34);
   if (CLS().ranged) {
     P.atkT *= 1.2;
     let a = aim;
-    if (a == null) { const n = nearestMob(340); a = n ? Math.atan2(n.y - P.y, n.x - P.x) : P.face; }
+    if (a == null) { const n = nearestMob(P.cls === 'min' ? 400 : 340); a = n ? Math.atan2(n.y - P.y, n.x - P.x) : P.face; }
     P.face = a; P.swing = .16; P.swingDir = a;
-    const bolt = da => pshots.push({ x: P.x + Math.cos(a + da) * 16, y: P.y + Math.sin(a + da) * 16, vx: Math.cos(a + da) * 560, vy: Math.sin(a + da) * 560, life: .65, dmg: PW() * iceMul(), ice: 1 });
+    const bolt = da => pshots.push({ x: P.x + Math.cos(a + da) * 16, y: P.y + Math.sin(a + da) * 16, vx: Math.cos(a + da) * 560, vy: Math.sin(a + da) * 560, life: P.cls === 'min' ? .78 : .65, dmg: PW() * iceMul() * (P.cls === 'min' ? 1.5 : 1), ice: 1 });
     bolt(0); if (S.powers.multi && Math.random() < .25) bolt(.18);
     return;
   }
@@ -4565,7 +4569,7 @@ function updatePlayer(dt) {
   // 공격 입력
   if (mouse.down) tryAttack(Math.atan2(mouse.y - H / 2, mouse.x - W / 2));
   else if (attackHeld || keys.Space || keys.KeyJ) tryAttack(null);
-  else if (!P.dash && nearestMob(CLS().ranged ? 330 : 58)) tryAttack(null); // 자동 공격: 사거리 안에 몹이 있으면
+  else if (!P.dash && nearestMob(CLS().ranged ? (P.cls === 'min' ? 400 : 330) : 58)) tryAttack(null); // 자동 공격: 사거리 안에 몹이 있으면
   // 재생
   const ooc = GT - P.lastHurt > 5 && GT - (P.lastAtk || -99) > 5 ? S.maxHp * .015 : 0;
   P.hp = Math.min(S.maxHp, P.hp + (S.regen + ooc) * S.regenMul * dt);
