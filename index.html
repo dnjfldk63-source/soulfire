@@ -3716,6 +3716,7 @@ function setMeteor(x, y) {
   setTimeout(() => { for (const m of mobs) if (m.hp > 0 && Math.hypot(m.x - x, m.y - y) < 100 + m.r) damageMob(m, PW() * 3, false); }, 0);
 }
 function damageMob(e, base, canCrit = true, flat = false, kb = flat ? 0 : 1) {
+  if (e.crackT && e.crackT > GT) base *= 1 + WZ_CRACK.v; // 위자드 빙하 낙하 각성: 서리 균열
   if (e.hp <= 0 || e.air) return;
   if (e.shield) { if (Math.random() < .12) addText(e.x, e.y - e.r - 16, '무적', '#9fe8ff', 13); return; }
   base *= .9;
@@ -4095,7 +4096,7 @@ function wizBoom(x, y, dmg, skip) {
   for (const m of mobs) if (m !== skip && m.hp > 0 && Math.hypot(m.x - x, m.y - y) < 90 + m.r) damageMob(m, dmg * .6, false, false, .8);
 }
 function wizBuffApply(v) { P.wBuff = { t: v.d, a: v.a, s: v.s, aw: !!v.aw }; calc(); WZO.push({ k: 'cast', id: 0, t: 0, life: .8, col: v.aw ? '255,120,60' : '255,210,110' }); addText(P.x, P.y - 70, '축복', v.aw ? '#ff9a5a' : '#ffd27a', 15); }
-const HEAL_MAG = .2, WZ_BURN = .2; // 마력 1당 추가 회복량
+const HEAL_MAG = .2, WZ_BURN = .2, WZ_CRACK = { d: 6, cd: 12, v: .4 }; // 서리 균열: 6초간 받는 피해 +40%, 같은 적에게 12초마다 // 마력 1당 추가 회복량
 function wizHealMe(pct, shieldPct, mine, flat) {
   if (P.dead) return; const v = Math.round(S.maxHp * pct + (flat || 0)); P.hp = Math.min(S.maxHp, P.hp + v);
   addText(P.x + rand(-6, 6), P.y - 60, '+' + fmt(v), '#7dff9a', 15); WZO.push({ k: 'heal', id: 0, t: 0, life: 1 });
@@ -4129,7 +4130,7 @@ const WIZ_SKILLS = {
       SFX.fball(); } },
   wIce: { cls: 'min', name: '빙하 낙하', type: '액티브', icon: '❄', img: 'ic_ice',
     tg: [1, 2, 3, 4, 5], c: [6, 7, 8, 10, 12], m: [.52, .58, .64, .7, .78], cdv: [3.4, 3.2, 3, 2.8, 2.6],
-    desc(l) { const aw = l >= SK_AW; return `적 ${Math.round(pickL(this.tg, l))}마리 머리 위로 고드름·우박 ${Math.round(pickL(this.c, l)) + (wizSet('frost6') ? 4 : 0)}개를 떨어뜨려요 (적이 적으면 한 마리에게 우수수). 한 개당 마력의 ${pct(pickL(this.m, l) * (aw ? 1.25 : 1))} 마법 피해, 맞은 적은 잠시 느려져요.${aw ? ' 각성: 맞을 때마다 빙결이 쌓이고, 5번 쌓이면 1초 동안 꽁꽁 얼어붙어요. 피해 +25%.' : ''} ${pickL(this.cdv, l)}초마다${wizSet('frost6') ? ' · ❄ 서리 여왕 세트: 고드름 +4, 빙결 2배' : ''}`; },
+    desc(l) { const aw = l >= SK_AW; return `적 ${Math.round(pickL(this.tg, l))}마리 머리 위로 고드름·우박 ${Math.round(pickL(this.c, l)) + (wizSet('frost6') ? 4 : 0)}개를 떨어뜨려요 (적이 적으면 한 마리에게 우수수). 한 개당 마력의 ${pct(pickL(this.m, l) * (aw ? 1.25 : 1))} 마법 피해, 맞은 적은 잠시 느려져요.${aw ? ' 각성: 맞을 때마다 빙결이 쌓이고, 5번 쌓이면 1초 동안 꽁꽁 얼어붙어요. 피해 +25%. 얼지 않는 보스에게는 대신 서리 균열이 걸려 6초 동안 받는 모든 피해 +40% (같은 적에게 12초마다).' : ''} ${pickL(this.cdv, l)}초마다${wizSet('frost6') ? ' · ❄ 서리 여왕 세트: 고드름 +4, 빙결 2배' : ''}`; },
     cd(l) { return pickL(this.cdv, l); },
     cast(l) { const ts = mobs.filter(m => m.hp > 0 && !m.air && inView(m) && Math.hypot(m.x - P.x, m.y - P.y) < 600).sort((a, b) => Math.hypot(a.x - P.x, a.y - P.y) - Math.hypot(b.x - P.x, b.y - P.y)).slice(0, Math.round(pickL(this.tg, l))); if (!ts.length) return false;
       const c = Math.round(pickL(this.c, l)) + (wizSet('frost6') ? 4 : 0), aw = l >= SK_AW, dmg = PW() * pickL(this.m, l) * (aw ? 1.25 : 1);
@@ -4168,7 +4169,7 @@ const WIZ_SKILLS = {
 const WIZ_AWAKEN = {
   wLight: { name: '붉은 쌍번개', desc: '붉은 번개가 두 줄기로 — 가장 먼 적과 가장 가까운 적에게 동시에 떨어져요' },
   wFire: { name: '푸른 업화', desc: '화염구가 푸른 불꽃으로 바뀌어 맞은 적을 3초 동안 태워요 (화상 도트 피해)' },
-  wIce: { name: '절대 영도', desc: '빙결이 5번 쌓이면 1초 동안 얼어붙고, 피해가 25% 늘어요' },
+  wIce: { name: '절대 영도', desc: '빙결이 5번 쌓이면 1초 동안 얼어붙고 피해가 25% 늘어요. 보스에게는 서리 균열(6초간 받는 피해 +40%)' },
   wRevive: { name: '천상의 종', desc: '일어난 동료가 생명력을 가득 채우고 3초 동안 무적이에요' },
   wBuff: { name: '전장의 찬가', desc: '재사용 대기시간 15% 감소와 공격 속도 +20%가 더해져요' },
   wHeal: { name: '생명의 방벽', desc: '재사용 대기시간 30% 감소, 회복한 동료에게 보호막' },
@@ -4193,7 +4194,7 @@ function wizTick(dt) {
         o.hitDone = 1; const m = o.m;
         if (m && m.hp > 0) {
           DSRC = 'wIce'; damageMob(m, o.dmg, true, false, 0); DSRC = null; m.slow = Math.max(m.slowT > 0 ? m.slow || 0 : 0, .3); m.slowT = 1.5;
-          if (o.aw || wizSet('frost6')) { m.frost = (m.frost || 0) + (wizSet('frost6') ? 2 : 1); if (m.frost >= 5) { m.frost = 0; if (m.boss) { m.slow = .7; m.slowT = 1.2; } else { m.frz = 1; m.kbx = m.kby = 0; } addText(m.x, m.y - m.r - 20, '빙결!', '#9fe8ff', 15); addSfx('fx_frost', m.x, m.y - m.r * .3, m.r * 5, .55, { g0: .5, g1: 1.25, a: .95 }); } }
+          if (o.aw || wizSet('frost6')) { m.frost = (m.frost || 0) + (wizSet('frost6') ? 2 : 1); if (m.frost >= 5) { m.frost = 0; if (m.boss) { m.slow = .7; m.slowT = 1.2; if (GT >= (m.crackCD || 0)) { m.crackT = GT + WZ_CRACK.d; m.crackCD = GT + WZ_CRACK.cd; addText(m.x, m.y - m.r - 40, '서리 균열! 받는 피해 +' + Math.round(WZ_CRACK.v * 100) + '%', '#7fd8ff', 17); rings.push({ x: m.x, y: m.y, t: 0, life: .6, r: m.r * 3, col: '120,210,255' }); shake = Math.max(shake, 3); } } else { m.frz = 1; m.kbx = m.kby = 0; } addText(m.x, m.y - m.r - 20, '빙결!', '#9fe8ff', 15); addSfx('fx_frost', m.x, m.y - m.r * .3, m.r * 5, .55, { g0: .5, g1: 1.25, a: .95 }); } }
           burst(m.x + o.ox * .5, m.y - m.r * .4, '#cfefff', 7, 130, .4, 2.5); SFX.icek(1);
         }
       }
@@ -4221,6 +4222,7 @@ function wizGround() {
   for (const o of WZO) if (o.k === 'healbig') { const f = o.t / o.life, a = Math.sin(Math.min(1, f) * Math.PI); fxDraw('fx_heal', o.x, o.y + 6, o.r * 1.45 * (.75 + f * .3), 0, a * .85, .55); }
 }
 function wizDraw() {
+  for (const m of mobs) if (m.crackT && m.crackT > GT && m.hp > 0) { const k = Math.min(1, (m.crackT - GT) / 1), pu = .6 + Math.sin(GT * 8) * .25; ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = k * pu; ctx.strokeStyle = '#7fd8ff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(m.x, m.y + 6, m.r * 1.5, m.r * .5, 0, 0, TAU); ctx.stroke(); ctx.lineWidth = 2; for (let j = 0; j < 6; j++) { const a = j / 6 * TAU + 0.3; ctx.beginPath(); ctx.moveTo(m.x + Math.cos(a) * m.r * .4, m.y + 6 + Math.sin(a) * m.r * .14); ctx.lineTo(m.x + Math.cos(a + .25) * m.r * 1.5, m.y + 6 + Math.sin(a + .25) * m.r * .5); ctx.stroke(); } ctx.globalAlpha = k; ctx.font = 'bold 18px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#bfeeff'; ctx.fillText('❄', m.x, m.y - m.r * 2 - 30); ctx.restore(); }
   if (FXI.fx_burnb) for (const m of mobs) if (m.wBurn && m.hp > 0 && m.wBurn.t > 0) { const fl = .85 + Math.sin(GT * 23 + m.x) * .1, w = Math.max(36, m.r * 2.8) * fl, a = Math.min(1, m.wBurn.t * 2) * (.95 + Math.sin(GT * 31 + m.y) * .05); fxDraw('fx_burnb', m.x, m.y - w * .62 * 1.9 / 2 + m.r * .4, w, 0, a, 1, w * 1.9 * (.92 + Math.sin(GT * 17) * .08)); }
   const t0 = GT;
   // 축복 오라 · 보호막
