@@ -79,7 +79,9 @@ wss.on('connection', (ws, req) => {
     if (m.t === 'kill' && p.owner === p.id) { const s = JSON.stringify({ t: 'kill', n: m.n, by: Array.isArray(m.by) ? m.by.slice(0, 20) : [] }); for (const id of p.mem) toId(id, s); return; }
     if (m.t === 'hurt' && p.owner === p.id && p.mem.includes(m.to)) { toId(m.to, { t: 'hurt', v: num(m.v, 0, 1e9), n: m.n }); return; }
     // 지원 마법(치유·부활·축복): 같은 무리의 동료에게만
-    if (m.t === 'sup' && p.mem.length) { const k = clean(m.k, 8), o = JSON.stringify({ t: 'sup', from: p.id, k, v: num(m.v, 0, 100), s: num(m.s, 0, 100), d: num(m.d, 0, 60), aw: m.aw ? 1 : 0 }); const to = Array.isArray(m.to) ? m.to.filter(id => p.mem.includes(id)) : p.mem; for (const id of to) toId(id, o); return; }
+    if (m.t === 'sup' && p.mem.length) { const k = clean(m.k, 8), o = JSON.stringify({ t: 'sup', from: p.id, k, v: num(m.v, 0, 100), s: num(m.s, 0, 100), d: num(m.d, 0, 60), aw: m.aw ? 1 : 0, f: num(m.f, 0, 1e6) }); const to = Array.isArray(m.to) ? m.to.filter(id => p.mem.includes(id)) : p.mem; for (const id of to) toId(id, o); return; }
+    // 3단계: 기술 연출 — 무리 안의 다른 사람에게만 (피해 없음, 보여주기 전용)
+    if (m.t === 'cast' && p.mem.length) { const a = Array.isArray(m.a) ? m.a.slice(0, 19).map(v => Math.round(num(v, -20000, 20000))) : [], e = Array.isArray(m.e) ? m.e.slice(0, 4).map(v => Math.round(num(v, 0, 20000))) : num(m.e, 0, 9), s = JSON.stringify({ t: 'cast', from: p.id, k: clean(m.k, 12), a, e }); for (const id of p.mem) toId(id, s); return; }
     if (m.t === 'dmg' && p.owner && p.owner !== p.id) { toId(p.owner, { t: 'dmg', from: p.id, n: m.n, v: num(m.v, 0, 1e9), c: m.c ? 1 : 0, kb: m.kb ? 1 : 0, x: num(m.x, 0, 20000), y: num(m.y, 0, 20000) }); return; }
   });
   ws.on('close', () => { if (players.delete(p.id)) { broadcast({ t: 'leave', id: p.id }, p); regroup(); } });

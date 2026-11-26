@@ -2862,6 +2862,7 @@ function netOn(m) {
   else if (m.t === 'hurt') { if (!P.dead) hurtPlayer(m.v, NET.mm.get(m.n) || null); }
   else if (m.t === 'kill') netKillIn(m);
   else if (m.t === 'sup') wizSupIn(m);
+  else if (m.t === 'cast') remoteCast(m);
   else if (m.t === 'fx' && m.k === 'shot' && netMirror()) { const [x, y, vx, vy, life, size, col] = m.a; shots.push({ x, y, vx, vy, life: life / 100, size, col, dmg: 0, vis: 1 }); }
   else if (m.t === 'chat') { const o = NET.others.get(m.id); if (o) { o.bub = m.text; o.bubT = 5; } log(`💬 ${m.name}: ${m.text}`, '#bfe3ff'); }
   netUi();
@@ -2894,7 +2895,7 @@ function drawRemotes() {
     DECO.push({ x: o.x, y: o.y + 12, deco: () => {
       const C = CLASSES[o.cls] || CLASSES.mun, k = (o.skin && SPR[o.skin]) ? o.skin : (SPR[o.cls] || HERO_DRAW[o.cls] ? o.cls : 'mun'), sc = (SPR[o.cls] ? .64 : .52) * (C.scale || 1) * 1.08;
       ell(o.x, o.y + 12, 18.5 * (C.scale || 1), 6.5, 'rgba(0,0,0,.4)');
-      ctx.save(); ctx.globalAlpha = .96; drawHero(ctx, k, o.x, o.y + 12, sc, GT, { flip: Math.cos(o.face) < 0, flipS: Math.cos(o.face) < 0 ? -1 : 1, turnK: 1, vdir: o.vd, vprev: o.vd, vk: 1, walk: o.walk, moving: !!o.mv, lean: o.mv ? 1 : 0, pick: -1, noShadow: 1, seed: o.id }); ctx.restore();
+      ctx.save(); ctx.globalAlpha = o.stT > GT ? .35 : .96; drawHero(ctx, k, o.x, o.y + 12, sc, GT, { atk: o.atkA, flip: Math.cos(o.face) < 0, flipS: Math.cos(o.face) < 0 ? -1 : 1, turnK: 1, vdir: o.vd, vprev: o.vd, vk: 1, walk: o.walk, moving: !!o.mv, lean: o.mv ? 1 : 0, pick: -1, noShadow: 1, seed: o.id }); ctx.restore();
       label(`${o.name} · Lv${o.lv}`, o.x, o.y - 84 * (C.scale || 1), '#9fe0ff', 11, 700);
       if (o.bubT > 0) bubble(o.bub, o.x, o.y - 98 * (C.scale || 1));
     } });
@@ -4261,6 +4262,7 @@ function useUlt() {
     rings.push({ x: ULF.x, y: ULF.y, t: 0, life: .9, r: 340, col: '255,235,150' }); rings.push({ x: ULF.x, y: ULF.y, t: -.15, life: .9, r: 260, col: '140,255,170' });
     SFX.cure(); SFX.powup();
   }
+  netCast('ult_' + P.cls, P.cls === 'min' && ULF ? [Math.round(ULF.x), Math.round(ULF.y)] : 0);
   updHud();
 }
 const ultIn = (f, x, y) => Math.hypot(x - f.x, (y - f.y) * 1.25) < f.r;
@@ -4346,8 +4348,88 @@ function ultTick(dt) {
     }
   }
 }
-function ultGround() {
-  const F = ULF; if (!F) return;
+// ───────── 멀티: 다른 플레이어 공격·기술·궁극기 연출 (피해 없는 보여주기 전용) ─────────
+const RFX = [], RFLD = [];
+let castLastAtk = 0;
+function netCast(k, extra) {
+  if (!(NET.on && NET.grouped) || RAID || HOUSE) return;
+  if (k === 'atk') { if (GT - castLastAtk < .22) return; castLastAtk = GT; }
+  const T = mobs.filter(m => m.hp > 0 && !m.air && Math.hypot(m.x - P.x, m.y - P.y) < 520).sort((a, b) => Math.hypot(a.x - P.x, a.y - P.y) - Math.hypot(b.x - P.x, b.y - P.y)).slice(0, 8);
+  const a = [Math.round(P.x), Math.round(P.y), Math.round((P.face || 0) * 100)];
+  for (const m of T) a.push(Math.round(m.x), Math.round(m.y));
+  netSend({ t: 'cast', k, a: a.slice(0, 19), e: extra || 0 });
+}
+function rfxTargets(o, a) { const T = []; for (let i = 3; i + 1 < a.length; i += 2) T.push({ x: a[i], y: a[i + 1] }); if (!T.length) { const f = (a[2] || 0) / 100; T.push({ x: o.x + Math.cos(f) * 220, y: o.y + Math.sin(f) * 220 }); } return T; }
+function rfxBoom(kind, x, y) {
+  if (kind === 'fire') { addSfx('fx_fireboom', x, y - 8, 80, .32, { rot: rand(-.3, .3), g0: .5, g1: 1.1, a: .85 }); burst(x, y, '#ff8a2a', 7, 130, .4, 3); }
+  else if (kind === 'bfire') { burst(x, y, '#5aa8ff', 9, 140, .45, 3); }
+  else if (kind === 'dyna' || kind === 'rkt') { addSfx('fx_fireboom', x, y - 12, kind === 'rkt' ? 120 : 150, .45, { rot: rand(-.4, .4), g0: .4, g1: 1.2, a: .95 }); rings.push({ x, y, t: 0, life: .35, r: 80, col: '255,160,60' }); burst(x, y, '#ffb04a', 8, 200, .45, 3); }
+  else if (kind === 'ice') { burst(x, y - 10, '#cfefff', 8, 130, .4, 2.5); }
+  else if (kind === 'small') burst(x, y, '#d8d0ff', 4, 80, .25, 2);
+}
+function rfxProj(o, kind, tx, ty, opt) { const a = Math.atan2(ty - (o.y - 20), tx - o.x); RFX.push(Object.assign({ k: 'p', kind, x: o.x + Math.cos(a) * 16, y: o.y - 20 + Math.sin(a) * 16, sx: o.x, sy: o.y - 20, tx, ty, t: 0, life: Math.max(.12, Math.hypot(tx - o.x, ty - o.y) / ((opt && opt.sp) || 520)) }, opt || {})); }
+function remoteCast(m) {
+  const o = NET.others.get(m.from); if (!o || o.map !== CUR || o.inst || RAID || HOUSE) return;
+  if (Math.abs(o.x - P.x) > 1100 || Math.abs(o.y - P.y) > 900) return;
+  const a = Array.isArray(m.a) ? m.a : [], T = rfxTargets(o, a), f = (a[2] || 0) / 100, k = m.k;
+  o.face = f; o.atkA = 0;
+  if (k === 'atk') { if (o.cls === 'min') rfxProj(o, 'bolt', T[0].x, T[0].y, { sp: 560 }); else addSfx('slash', o.x + Math.cos(f) * 28, o.y - 10 + Math.sin(f) * 28, 90, .22, { rot: f, g0: .7, g1: 1.1 }); return; }
+  if (k === 'eDyna') { T.slice(0, 6).forEach((p, i) => rfxProj(o, 'dyna', p.x + rand(-12, 12), p.y + rand(-8, 8), { sp: 380, arc: 1, t: -i * .08 })); return; }
+  if (k === 'eShot') { for (let i = 0; i < 9; i++) { const aa = f + (i / 8 - .5) * .62; rfxProj(o, 'pel', o.x + Math.cos(aa) * 300, o.y - 20 + Math.sin(aa) * 300, { sp: 900 }); } addSfx('boom', o.x + Math.cos(f) * 30, o.y - 18 + Math.sin(f) * 30, 70, .18, { rot: f, g0: .5, g1: 1, n: 1, a: .9 }); return; }
+  if (k === 'eTurret') { RFX.push({ k: 'deco', img: 'tur', x: o.x + rand(-46, 46), y: o.y + rand(-20, 24), t: 0, life: 10 }); burst(o.x, o.y - 10, '#c9a060', 12, 150, .45, 3); return; }
+  if (k === 'eTesla') { let s = { x: o.x, y: o.y - 10 }; for (const p of T.slice(0, 6)) { chains.push({ x1: s.x, y1: s.y - 20, x2: p.x, y2: p.y - 20, t: 0, seed: Math.random() * 99 }); s = p; } addSfx('shock', o.x, o.y - 20, 70, .3, { g0: .5, g1: 1.1 }); return; }
+  if (k === 'eMine') { for (let i = 0; i < 6; i++) { const p = T[i % T.length]; RFX.push({ k: 'deco', img: 'mine', x: p.x + rand(-30, 30), y: p.y + rand(-20, 20), t: 0, life: rand(1.5, 3.5), boom: 'dyna' }); } return; }
+  if (k === 'eFlame') { RFX.push({ k: 'emit', kind: 'flame', o, f, t: 0, life: 1.6 }); return; }
+  if (k === 'tFan') { for (let i = 0; i < 7; i++) { const aa = f + (i / 6 - .5) * .72; rfxProj(o, 'dag', o.x + Math.cos(aa) * 360, o.y - 18 + Math.sin(aa) * 360, { sp: 760 }); } return; }
+  if (k === 'tStep') { const p = T[0]; for (let i = 0; i < 3; i++) addSfx('slash', p.x + rand(-10, 10), p.y - 12, 110, .3, { rot: rand(0, TAU), g0: .7, g1: 1.15 }); burst(p.x, p.y - 14, '#a070ff', 14, 160, .45, 3); return; }
+  if (k === 'tSmoke') { const p = T[0]; rings.push({ x: p.x, y: p.y, t: 0, life: .6, r: 150, col: '150,150,160' }); for (let i = 0; i < 26; i++) { const aa = rand(0, TAU), d = rand(0, 150); fx.push({ x: p.x + Math.cos(aa) * d, y: p.y + Math.sin(aa) * d * .7, vx: rand(-15, 15), vy: -rand(5, 25), t: 0, life: rand(1, 2.2), col: Math.random() < .5 ? '#6a6a72' : '#8a8a94', size: rand(5, 9) }); } return; }
+  if (k === 'tClone') { for (let i = 0; i < 4; i++) { const aa = i / 4 * TAU; burst(o.x + Math.cos(aa) * 40, o.y + Math.sin(aa) * 26 - 20, '#7a3aff', 14, 140, .5, 3.5); } rings.push({ x: o.x, y: o.y, t: 0, life: .5, r: 90, col: '150,80,255' }); return; }
+  if (k === 'tStealth') { o.stT = GT + 6; burst(o.x, o.y - 20, '#3a2a4a', 16, 120, .5, 4); return; }
+  if (k === 'tStorm') { RFX.push({ k: 'emit', kind: 'spin', o, t: 0, life: 2, tick: 0 }); return; }
+  if (k === 'wLight') { let s = { x: o.x, y: o.y - 30 }; for (const p of T.slice(0, 8)) { chains.push({ x1: s.x, y1: s.y, x2: p.x, y2: p.y - 20, t: 0, seed: Math.random() * 99 }); burst(p.x, p.y - 20, '#bfe4ff', 5, 110, .3, 2.5); s = { x: p.x, y: p.y - 20 }; } return; }
+  if (k === 'wFire') { const aw = !!m.e; T.slice(0, 8).forEach((p, i) => rfxProj(o, aw ? 'bfire' : 'fire', p.x, p.y - 10, { sp: 520, t: -i * .04 })); return; }
+  if (k === 'wIce') { for (let i = 0; i < 10; i++) { const p = T[i % T.length]; RFX.push({ k: 'ice', x: p.x + rand(-20, 20), y: p.y + rand(-10, 10), t: -i * .07, life: .32 }); } return; }
+  if (k === 'wHeal') { addSfx('fx_heal', o.x, o.y + 6, 260, .8, { g0: .7, g1: 1.05, a: .85, sq: .55 }); burst(o.x, o.y - 20, '#7dff9a', 16, 150, .6, 3); return; }
+  if (k === 'wBuff' || k === 'wRevive') { rings.push({ x: o.x, y: o.y, t: 0, life: .7, r: 120, col: '255,215,110' }); burst(o.x, o.y - 30, '#ffd27a', 14, 140, .6, 3); return; }
+  if (k === 'ult_mik') { RFX.push({ k: 'emit', kind: 'rockets', o, t: 0, life: 10, tick: 0 }); return; }
+  if (k === 'ult_chae') { for (let i = 0; i < 6; i++) { const aa = i / 6 * TAU; burst(o.x + Math.cos(aa) * 60, o.y + Math.sin(aa) * 40 - 20, '#7a3aff', 18, 160, .6, 4); } RFX.push({ k: 'emit', kind: 'shadow', o, t: 0, life: 5, tick: 0 }); return; }
+  if (k === 'ult_min') { const cx = a[3] != null ? a[3] : o.x, cy = a[4] != null ? a[4] : o.y; RFLD.push({ x: Array.isArray(m.e) ? m.e[0] : cx, y: Array.isArray(m.e) ? m.e[1] : cy, r: 300, t: 0, life: 15 }); return; }
+}
+function rfxTick(dt) {
+  for (const f of RFLD) f.t += dt; for (let i = RFLD.length - 1; i >= 0; i--) if (RFLD[i].t > RFLD[i].life) RFLD.splice(i, 1);
+  for (const o of NET.others.values()) if (o.atkA != null) { o.atkA += dt / .3; if (o.atkA >= 1) o.atkA = null; }
+  for (const r of RFX) {
+    r.t += dt; if (r.t < 0) continue;
+    if (r.k === 'p') { const k = Math.min(1, r.t / r.life); r.x = r.sx + (r.tx - r.sx) * k; r.y = r.sy + (r.ty - r.sy) * k - (r.arc ? Math.sin(k * Math.PI) * 70 : 0); if (r.kind === 'rkt' && Math.random() < .8) fx.push({ x: r.x, y: r.y, vx: rand(-15, 15), vy: rand(-25, 5), t: 0, life: rand(.25, .5), col: Math.random() < .55 ? '#8a8a8a' : '#ffb04a', size: rand(2, 4) }); if (r.kind === 'fire' && Math.random() < .6) fx.push({ x: r.x, y: r.y, vx: rand(-20, 20), vy: rand(-30, 0), t: 0, life: .3, col: '#ff8a2a', size: 3 }); if (k >= 1) { r.done = 1; rfxBoom(r.kind === 'bolt' || r.kind === 'dag' || r.kind === 'pel' ? 'small' : r.kind, r.tx, r.ty); } }
+    else if (r.k === 'deco') { if (r.t > r.life) { r.done = 1; if (r.boom) rfxBoom(r.boom, r.x, r.y); } }
+    else if (r.k === 'ice') { if (r.t >= r.life) { r.done = 1; rfxBoom('ice', r.x, r.y); } }
+    else if (r.k === 'emit') {
+      const o = r.o; if (r.t > r.life || !NET.others.has(o.id)) { r.done = 1; continue; }
+      if (r.kind === 'flame') { for (let i = 0; i < 3; i++) { const aa = r.f + rand(-.4, .4), s = rand(200, 320); fx.push({ x: o.x + Math.cos(r.f) * 20, y: o.y - 18 + Math.sin(r.f) * 20, vx: Math.cos(aa) * s, vy: Math.sin(aa) * s, t: 0, life: rand(.35, .55), col: Math.random() < .5 ? '#ff7a1a' : '#ffd05a', size: rand(4, 7) }); } }
+      else if (r.kind === 'spin') { r.tick -= dt; if (r.tick <= 0) { r.tick = .14; addSfx('slash', o.x, o.y - 10, 220, .3, { spin: 12, sq: .6, g0: .7, g1: 1.15 }); } }
+      else if (r.kind === 'shadow') { r.tick -= dt; if (r.tick <= 0) { r.tick = .4; const aa = rand(0, TAU), x = o.x + Math.cos(aa) * 70, y = o.y + Math.sin(aa) * 45; addSfx('slash', x, y - 10, 160, .35, { spin: 12, sq: .6, g0: .7, g1: 1.15 }); burst(x, y - 18, '#a060ff', 6, 100, .35, 3); } }
+      else if (r.kind === 'rockets') { r.tick -= dt; while (r.tick <= 0) { r.tick += .1; const ts = mobs.filter(m => m.hp > 0 && Math.hypot(m.x - o.x, m.y - o.y) < 520); const tg = ts.length ? ts[Math.floor(Math.random() * ts.length)] : { x: o.x + rand(-200, 200), y: o.y + rand(-260, 60) }; RFX.push({ k: 'p', kind: 'rkt', sx: o.x + rand(-10, 10), sy: o.y - 34, x: o.x, y: o.y - 34, tx: tg.x + rand(-10, 10), ty: tg.y - 10, t: 0, life: rand(.45, .7), arc: 1 }); } }
+    }
+  }
+  for (let i = RFX.length - 1; i >= 0; i--) if (RFX[i].done) RFX.splice(i, 1);
+  if (RFX.length > 400) RFX.splice(0, RFX.length - 400);
+}
+function rfxDraw() {
+  for (const r of RFX) {
+    if (r.t < 0) continue;
+    if (r.k === 'p') {
+      const a = Math.atan2(r.ty - r.sy, r.tx - r.sx);
+      if ((r.kind === 'fire' || r.kind === 'bfire') && fxDraw(r.kind === 'bfire' && FXI.fireball_b ? 'fireball_b' : 'fireball', r.x, r.y, r.kind === 'bfire' ? 70 : 56, a + FB_ROT, 1)) continue;
+      if (r.kind === 'rkt' && FXI.ult_rocket) { const im = FXI.ult_rocket, w = 46, h = w * im.height / im.width; ctx.save(); ctx.translate(r.x, r.y); ctx.rotate(a); ctx.drawImage(im, -w * .62, -h / 2, w, h); ctx.restore(); continue; }
+      if (r.kind === 'dag' && ENG_IMG.t_dag) { const im = ENG_IMG.t_dag, w = 34, h = w * im.height / im.width; ctx.save(); ctx.translate(r.x, r.y); ctx.rotate(a); ctx.drawImage(im, -w * .62, -h / 2, w, h); ctx.restore(); continue; }
+      if (r.kind === 'dyna') { ctx.save(); ctx.translate(r.x, r.y); ctx.rotate(r.t * 12); ctx.fillStyle = '#b03a2a'; ctx.fillRect(-3, -7, 6, 14); ctx.fillStyle = '#ffd05a'; ctx.fillRect(-1, -10, 2, 3); ctx.restore(); continue; }
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; circ(r.x, r.y, r.kind === 'pel' ? 3 : 6, r.kind === 'pel' ? '#ffe08a' : '#b9a8ff'); ctx.restore();
+    } else if (r.k === 'deco') { const im = ENG_IMG[r.img]; if (im) { const s = r.img === 'tur' ? 54 : 30, h = s * im.height / im.width; ctx.save(); ctx.globalAlpha = Math.min(1, r.t * 4, (r.life - r.t) * 3); ctx.drawImage(im, r.x - s / 2, r.y - (r.img === 'tur' ? h - 6 : h * .7), s, h); ctx.restore(); } }
+    else if (r.k === 'ice') { const k = Math.min(1, r.t / r.life), y = r.y - 40 - 190 * (1 - k) * (1 - k); if (!fxDraw('fx_icicle', r.x, y - 20, 18, 0, .95)) circ(r.x, y, 4, '#cfefff'); }
+  }
+}
+function ultGround() { if (ULF) drawField(ULF); for (const f of RFLD) drawField(f); }
+function drawField(F) {
   const a = Math.min(1, F.t * 3, (F.life - F.t) * 1.5), pu = .8 + Math.sin(GT * 3) * .2, R = F.r * Math.min(1, .3 + F.t * 2.5);
   ctx.save(); ctx.translate(F.x, F.y); ctx.scale(1, .8); ctx.globalCompositeOperation = 'lighter';
   const g = ctx.createRadialGradient(0, 0, R * .05, 0, 0, R); g.addColorStop(0, `rgba(255,240,170,${.30 * a * pu})`); g.addColorStop(.55, `rgba(120,255,170,${.14 * a})`); g.addColorStop(.92, `rgba(90,220,255,${.20 * a})`); g.addColorStop(1, 'rgba(90,220,255,0)');
@@ -4488,6 +4570,7 @@ function skillTick(dt) {
     if (P.skT[id] > 0) continue;
     if (id !== 'proxy' && id !== 'wRevive' && id !== 'wHeal' && !near && !(id === 'wBuff' && (RAID || nearestMob(900)))) { P.skT[id] = .25; continue; }
     DSRC = id; const cr = sk.cast(l); DSRC = null;
+    if (cr !== false) netCast(id, id === 'wFire' && l >= SK_AW ? 1 : 0);
     P.skT[id] = cr === false ? .3 : sk.cd(l) * (S.cdr || 1) * (1 - Math.min(40, S.cdrp || 0) / 100);
   }
   const ol = skLv('orbit');
@@ -4618,6 +4701,7 @@ function tryAttack(aim) {
   if (S.powers.reap) { P.reapN = (P.reapN || 0) + 1; if (P.reapN % 4 === 0) reapNova(); }
   P.atkT = .5 / (1 + (S.aspd + hasteMul()) / 100);
   P.atkA = 0; P.atkDur = clamp(P.atkT * .9, .2, .34);
+  netCast('atk');
   if (CLS().ranged) {
     P.atkT *= 1.2;
     let a = aim;
@@ -5806,7 +5890,7 @@ function draw() {
     if (p.kind === 'mace') { fxDraw('fireball', p.x - p.vx * .03, p.y - p.vy * .03, 46, Math.atan2(p.vy, p.vx) + FB_ROT, .75); ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(GT * 14); ctx.strokeStyle = '#6a4a2a'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-12, 0); ctx.stroke(); circ(0, 0, 6.5, '#8d939c'); for (let k = 0; k < 6; k++) { const a = k / 6 * TAU; circ(Math.cos(a) * 7.5, Math.sin(a) * 7.5, 2, '#d3d7de'); } circ(-2, -2, 2, '#e8ecf0'); ctx.restore(); continue; }
     if (p.kind === 'dagger') { ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(Math.atan2(p.vy, p.vx)); ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.fillRect(-22, -1, 16, 2); ctx.fillStyle = '#e3e8ee'; ctx.beginPath(); ctx.moveTo(11, 0); ctx.lineTo(-4, -2.6); ctx.lineTo(-4, 2.6); ctx.fill(); ctx.fillStyle = '#c9a24a'; ctx.fillRect(-5, -3.5, 2, 7); ctx.fillStyle = '#5a3b26'; ctx.fillRect(-10, -1.5, 5, 3); ctx.restore(); continue; }
     if (fxDraw('orb', p.x, p.y, 34, GT * 6, 1)) continue; ctx.globalAlpha = .35; circ(p.x, p.y, 13, '#8f7dff'); ctx.globalAlpha = 1; circ(p.x, p.y, 6, '#c9c0ff'); circ(p.x, p.y, 3, '#ffffff'); }
-  engDraw(); thfDraw(); wizDraw(); ultDraw(); petDraw(); drawWarpBeam();
+  engDraw(); thfDraw(); wizDraw(); ultDraw(); rfxDraw(); petDraw(); drawWarpBeam();
   for (const s of shots) { if (s.size >= 6 && s.src && s.src.boss && fxDraw('fireball', s.x, s.y, s.size * 6, Math.atan2(s.vy, s.vx) + FB_ROT, 1)) continue; ctx.globalAlpha = .35; circ(s.x, s.y, s.size * 2, s.col); ctx.globalAlpha = 1; circ(s.x, s.y, s.size, s.col); }
   if (CUR === 'snow' && !HOUSE && !RAID) drawSnowfall(vw, vh, camX, camY);
   if (CUR === 'main' && !HOUSE && !RAID && !P.ending) drawAshfall(vw, vh, camX, camY);
@@ -6820,7 +6904,7 @@ function frame(now) {
   const dt = Math.max(0, Math.min(.05, (now - last) / 1000)); last = now;
   if (FISH) fishUpdate(dt);
   if (ZV) zvTick(dt);
-  if (HITSTOP > 0) { HITSTOP -= dt; } else if (started && !ZV && !P.dead && !CUT && !ENDING && ((NET.on && NET.grouped) || (!panel && !lvlOpen && !LOCK && !DLG && !FISH && !RW && $('#raidRes').hidden))) { update(dt); gatherTick(dt); wnodeTick(dt); engTick(dt); thfTick(dt); wizTick(dt); ultTick(dt); warpTick(dt); petTick(dt); critTick(dt); netTick(dt); if (P.bubT > 0) P.bubT -= dt; autoPortal(); }
+  if (HITSTOP > 0) { HITSTOP -= dt; } else if (started && !ZV && !P.dead && !CUT && !ENDING && ((NET.on && NET.grouped) || (!panel && !lvlOpen && !LOCK && !DLG && !FISH && !RW && $('#raidRes').hidden))) { update(dt); gatherTick(dt); wnodeTick(dt); engTick(dt); thfTick(dt); wizTick(dt); ultTick(dt); rfxTick(dt); warpTick(dt); petTick(dt); critTick(dt); netTick(dt); if (P.bubT > 0) P.bubT -= dt; autoPortal(); }
   else if (started && P.dead && NET.on && NET.grouped && !ENDING) netDeadTick(dt); // 쓰러져 있어도 무리의 몹은 계속 움직임
   else if (!started) { GT += dt; P.walk = 0; }
   const pf1 = performance.now();
