@@ -2725,7 +2725,7 @@ function gainPet(k) { P.pets = P.pets || []; if (P.pets.includes(k)) return; P.p
 let PET = null;
 function petTick(dt) {
   const D = P.pet && PETS[P.pet]; if (!D || !(P.pets || []).includes(P.pet)) { PET = null; return; }
-  if (!PET || PET.k !== P.pet || Math.hypot(PET.x - P.x, PET.y - P.y) > 900) { for (const l of loot) l.pet = 0; PET = { k: P.pet, x: P.x - 30, y: P.y + 8, vx: 0, st: 'follow', tgt: null, t: 0 }; }
+  if (!PET || PET.k !== P.pet || Math.hypot(PET.x - P.x, PET.y - P.y) > 900) { for (const l of loot) { l.pet = 0; l.pc = 0; } PET = { k: P.pet, x: P.x - 30, y: P.y + 8, vx: 0, st: 'follow', tgt: null, t: 0 }; }
   const E = PET; E.t += dt;
   // 펫: 화면 안의 전리품을 차례로 다 주워 모은 뒤, 한꺼번에 주인 곁으로 가져옴
   E.carry = (E.carry || []).filter(l => !l.gone && loot.includes(l));
@@ -2735,15 +2735,16 @@ function petTick(dt) {
   if (E.st === 'follow' && !P.dead) { const n = nextLoot(E.x, E.y); if (n) { E.tgt = n; n.pet = 1; E.st = 'fetch'; } }
   let tx, ty, sp = D.spd;
   if (E.st === 'fetch') { tx = E.tgt.x; ty = E.tgt.y; if (Math.hypot(tx - E.x, ty - E.y) < 14) { E.carry.push(E.tgt); const n = nextLoot(E.x, E.y); if (n) { E.tgt = n; n.pet = 1; } else { E.tgt = null; E.st = 'back'; } } }
-  if (E.st === 'back') { tx = P.x; ty = P.y; if (Math.hypot(P.x - E.x, P.y - E.y) < 26 || !E.carry.length) { for (const l of E.carry) { l.x = P.x; l.y = P.y; l.pet = 0; } E.carry = []; E.st = 'follow'; } }
-  E.carry.forEach((l, i) => { l.x = E.x + Math.sin(i * 2.1) * 6; l.y = E.y - 6 - i * 3; });
+  if (E.st === 'back') { tx = P.x; ty = P.y; if (Math.hypot(P.x - E.x, P.y - E.y) < 26 || !E.carry.length) { for (const l of E.carry) { l.x = P.x; l.y = P.y; l.pet = 0; l.pc = 0; } E.carry = []; E.st = 'follow'; } }
+  E.carry.forEach(l => { l.x = E.x; l.y = E.y; l.pc = 1; });
   if (E.st === 'follow') { const side = Math.cos(P.face || 0) < 0 ? 1 : -1; tx = P.x + side * 34; ty = P.y + 6; sp = Math.max(60, Math.hypot(tx - E.x, ty - E.y) * 4); }
   const dx = tx - E.x, dy = ty - E.y, d = Math.hypot(dx, dy);
   if (d > 2) { const m = Math.min(d, sp * dt); E.vx = dx / d * m / dt; E.x += dx / d * m; E.y += dy / d * m; E.mv = 1; } else { E.vx = 0; E.mv = 0; }
   if (D.fx && Math.random() < dt * (E.mv ? 14 : 4)) fx.push({ x: E.x + rand(-6, 6), y: E.y - (D.fly ? 34 : 14) + rand(-6, 6), vx: rand(-10, 10), vy: -rand(10, 30), t: 0, life: rand(.3, .6), col: D.fx, size: rand(1, 2.2) });
 }
 function petDraw() {
-  const E = PET; if (!E) return; const D = PETS[E.k], im = PET_IMG[D.img]; const fly = D.fly ? 26 + Math.sin(GT * 4) * 4 : 0, hop = !D.fly && E.mv ? Math.abs(Math.sin(GT * 12)) * 4 : Math.sin(GT * 3) * .8;
+  const E = PET; if (!E) return;
+  if (E.carry && E.carry.length) { const D0 = PETS[E.k], hy = E.y - (D0 && D0.fly ? 58 : 40); ctx.save(); ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.beginPath(); ctx.ellipse(E.x, hy - 4, 15, 8, 0, 0, TAU); ctx.fill(); ctx.fillStyle = '#ffd76a'; ctx.fillText('×' + E.carry.length, E.x, hy); ctx.restore(); } const D = PETS[E.k], im = PET_IMG[D.img]; const fly = D.fly ? 26 + Math.sin(GT * 4) * 4 : 0, hop = !D.fly && E.mv ? Math.abs(Math.sin(GT * 12)) * 4 : Math.sin(GT * 3) * .8;
   ell(E.x, E.y + 10, D.fly ? 10 : 13, 4, 'rgba(0,0,0,.35)');
   if (!im) { circ(E.x, E.y - fly - hop, 9, D.fx); return; }
   if (E.vx < -5) E.flip = 1; else if (E.vx > 5) E.flip = 0;
@@ -5270,7 +5271,7 @@ function label(txt, x, y, col, size = 12, weight = 500) {
   ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.75)'; ctx.strokeText(txt, x, y); ctx.fillStyle = col; ctx.fillText(txt, x, y);
 }
 function drawLoot() {
-  for (const l of loot) { if (Math.abs(l.x - P.x) > 900 || Math.abs(l.y - P.y) > 700) continue;
+  for (const l of loot) { if (l.pc || Math.abs(l.x - P.x) > 900 || Math.abs(l.y - P.y) > 700) continue; // 펫이 물고 있는 전리품은 안 그림
     const bob = Math.sin(GT * 4 + l.x) * 2;
     if (l.kind === 'gold') { circ(l.x, l.y + bob, 5, '#e3c14a'); circ(l.x - 1, l.y - 1 + bob, 2, '#fff1a8'); continue; }
     if (l.kind === 'pot') { ctx.fillStyle = '#d6453a'; ctx.fillRect(l.x - 4, l.y - 3 + bob, 8, 9); ctx.fillStyle = '#ddd'; ctx.fillRect(l.x - 2, l.y - 7 + bob, 4, 4); continue; }
