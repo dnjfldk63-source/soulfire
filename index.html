@@ -1159,8 +1159,17 @@ const POWERS = {
   vamp: '생명력 흡수 +0.2%',
   haste: '적 처치 시 3초간 이동·공격 속도 +30%',
   soulburst: '처치한 적의 혼이 근처 적을 쫓아가 공격력 120% 피해',
+  homeFan: '씨프: 부채 단검이 적을 쫓아가는 유도 단검으로 바뀌어요',
+  fireBounce: '위자드: 화염구가 맞힌 뒤 근처 적에게 한 번 더 튕겨 50% 피해 (근처에 한 마리뿐이면 그 적을 다시 때려요)',
+  bladeRush: '씨프: 기본 공격 피해 +100%, 공격 속도 5배, 사거리 +30%',
+  arcRush: '위자드: 기본 공격 피해 +100%, 공격 속도 5배',
   reap: '기본 공격 4번마다 혼의 낫이 휘몰아쳐 주변 적에게 공격력 250% 피해, 맞힌 적마다 생명력 0.5% 회복',
 };
+const LEG_CLS = {
+  flameLen: { mik: ['화염 연료통 투구', 'flameLen'], chae: ['사냥매의 눈가리개', 'homeFan'], min: ['겹불꽃 공명관', 'fireBounce'] },
+  dynaR: { mik: ['폭약 장인의 반지', 'dynaR'], chae: ['질풍 칼날 반지', 'bladeRush'], min: ['마력 순환 고리', 'arcRush'] },
+};
+const legFor = (L, cls) => (LEG_CLS[L[1]] && LEG_CLS[L[1]][cls]) || L;
 const LEG = {
   weapon: [['잿불 군주의 송곳니', 'explode'], ['쌍둥이 달의 칼날', 'multi']],
   helm: [['파수꾼의 눈', 'thorns'], ['화염 연료통 투구', 'flameLen']],
@@ -1197,7 +1206,7 @@ function makeItem(ilvl, rb = 0, minR = 0, slot) {
   let name = base, power = null;
   if (r === 1) name = `${AFF[affix[0].k].p} ${base}`;
   if (r === 2) name = `${pick(RARE_A)}의 ${pick(RARE_B)}`;
-  if (r === 3) { const L = pick(LEG[slot]); name = L[0]; power = L[1]; }
+  if (r === 3) { const L = legFor(pick(LEG[slot]), P && P.cls); name = L[0]; power = L[1]; }
   const it0 = { id: ++itemSeq, slot, ilvl, r, tier, base, name, main, affix, power, enh: 0 };
   return (slot === 'weapon' || (slot === 'ring' && P && P.cls === 'min')) && P && CLS_WEP[P.cls] ? classifyWeapon(it0, P.cls) : it0;
 }
@@ -4101,7 +4110,7 @@ const thfM = () => 1 + (thfSet('blood6') ? .15 : 0) + (thfSet('frost6') ? .15 : 
 function thfFan(l) {
   const t = nearestMob(340); if (!t) return false; const K = SKILLS.tFan;
   const a0 = Math.atan2(t.y - P.y, t.x - P.x), n = pickL(K.n, l); P.face = a0;
-  for (let k = 0; k < n; k++) { const a = a0 + (n > 1 ? (k / (n - 1) - .5) * .72 : 0), sp = 760; THFO.push({ k: 'dag', x: P.x + Math.cos(a0) * 18, y: P.y - 18 + Math.sin(a0) * 18, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, t: 0, life: .5, dmg: PW() * pickL(K.m, l) * thfM(), hit: new Set(), pierce: l >= 4 ? 2 : 1, ret: l >= SK_AW }); }
+  for (let k = 0; k < n; k++) { const a = a0 + (n > 1 ? (k / (n - 1) - .5) * .72 : 0), sp = 760; THFO.push({ k: 'dag', x: P.x + Math.cos(a0) * 18, y: P.y - 18 + Math.sin(a0) * 18, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, t: 0, life: S.powers.homeFan ? .9 : .5, dmg: PW() * pickL(K.m, l) * thfM(), hit: new Set(), pierce: l >= 4 ? 2 : 1, ret: l >= SK_AW, home: !!S.powers.homeFan }); }
   SFX.knife(); return true;
 }
 const THF_SKILLS = {
@@ -4165,6 +4174,7 @@ function thfTick(dt) {
     if (o.k === 'later') { if (o.t >= o.at) { o.done = 1; if (!P.dead) o.fn(); } }
     else if (o.k === 'dag') {
       if (o.back) { const dx = P.x - o.x, dy = P.y - 18 - o.y, d = Math.hypot(dx, dy) || 1; o.vx = dx / d * 820; o.vy = dy / d * 820; if (d < 24) o.done = 1; }
+      else if (o.home) { if (!o.tg || o.tg.hp <= 0 || o.hit.has(o.tg)) { let b0 = null, bd = 340; for (const m of mobs) { if (m.hp <= 0 || m.air || o.hit.has(m)) continue; const d = Math.hypot(m.x - o.x, m.y - o.y); if (d < bd) { bd = d; b0 = m; } } o.tg = b0; } if (o.tg) { const sp = Math.hypot(o.vx, o.vy), ta = Math.atan2(o.tg.y - 16 - o.y, o.tg.x - o.x), ca = Math.atan2(o.vy, o.vx); let da = ((ta - ca + Math.PI * 3) % TAU) - Math.PI; const turn = Math.min(Math.abs(da), 14 * dt) * Math.sign(da); o.vx = Math.cos(ca + turn) * sp; o.vy = Math.sin(ca + turn) * sp; } }
       (o.tr || (o.tr = [])).unshift(o.x, o.y); if (o.tr.length > 12) o.tr.length = 12;
       o.x += o.vx * dt; o.y += o.vy * dt; if (Math.random() < dt * 22) fx.push({ x: o.x + rand(-3, 3), y: o.y + rand(-3, 3), vx: -o.vx * .05 + rand(-20, 20), vy: -o.vy * .05 + rand(-20, 20), t: 0, life: rand(.18, .32), col: Math.random() < .4 ? '#f2e8ff' : (o.ret || o.back ? '#c58cff' : '#9a6ad8'), size: rand(1, 2.2) });
       for (const m of mobs) if (m.hp > 0 && !o.hit.has(m) && Math.hypot(m.x - o.x, m.y - o.y) < m.r + 8) { o.hit.add(m); const k0 = SFXK; SFXK = 'blade'; damageMob(m, o.dmg, true, false, .8); SFXK = k0; THFO.push({ k: 'slash', x: o.x, y: o.y, a: Math.atan2(o.vy, o.vx), t: 0, life: .16, sm: 1 }); if (o.hit.size > o.pierce && !o.back) { if (o.ret) { o.back = 1; o.hit = new Set(); } else o.done = 1; break; } }
@@ -4620,7 +4630,7 @@ function wizTick(dt) {
       { const sp0 = Math.hypot(o.vx, o.vy), sp = Math.min(760 * (o.fsp || 1), sp0 + 900 * (o.fsp || 1) * dt); if (o.tg && o.t > .12) { const ta = Math.atan2(o.tg.y - o.tg.r * .4 - o.y, o.tg.x - o.x), ca = Math.atan2(o.vy, o.vx); let da = ((ta - ca + Math.PI * 3) % TAU) - Math.PI; const turn = Math.min(Math.abs(da), (4 + o.t * 8) * dt) * Math.sign(da); o.vx = Math.cos(ca + turn) * sp; o.vy = Math.sin(ca + turn) * sp; } else { o.vx = o.vx / sp0 * sp; o.vy = o.vy / sp0 * sp; } }
       o.x += o.vx * dt; o.y += o.vy * dt; if (Math.random() < .7) fx.push({ x: o.x + rand(-4, 4), y: o.y + rand(-4, 4), vx: rand(-25, 25), vy: rand(-35, 0), t: 0, life: rand(.2, .45), col: o.aw ? (Math.random() < .5 ? '#3a8cff' : '#9fe0ff') : Math.random() < .5 ? '#ff7a1a' : '#ffd05a', size: rand(2, 4.5) });
       if (o.t > o.life) { o.done = 1; continue; }
-      for (const m of mobs) if (m.hp > 0 && !m.air && Math.hypot(m.x - o.x, m.y - m.r * .4 - o.y) < m.r + 12) { o.done = 1; DSRC = 'wFire'; damageMob(m, o.dmg, true, false, .8); if (o.aw) { m.wBurn = { t: 3, tick: .5, d: Math.max(m.wBurn && m.wBurn.t > 0 ? m.wBurn.d : 0, o.dmg * WZ_BURN) }; burst(o.x, o.y, '#5aa8ff', 10, 150, .45, 3); } else { addSfx('fx_fireboom', o.x, o.y, 80, .32, { rot: rand(-.3, .3), g0: .5, g1: 1.1, a: .85 }); burst(o.x, o.y, '#ff8a2a', 8, 140, .4, 3); } DSRC = null; break; }
+      for (const m of mobs) if (m.hp > 0 && !m.air && !(m === o.skip && o.t < .3) && Math.hypot(m.x - o.x, m.y - m.r * .4 - o.y) < m.r + 12) { o.done = 1; DSRC = 'wFire'; damageMob(m, o.dmg, true, false, .8); if (S.powers.fireBounce && !o.bounced) { let nx = null, bd = 260; for (const q of mobs) { if (q === m || q.hp <= 0 || q.air) continue; const d = Math.hypot(q.x - m.x, q.y - m.y); if (d < bd) { bd = d; nx = q; } } if (!nx && m.hp > 0) nx = m; if (nx) { const a = Math.atan2(nx.y - nx.r * .4 - o.y, nx.x - o.x) + (nx === m ? Math.PI : 0); WZO.push({ k: 'fb', x: o.x, y: o.y, vx: Math.cos(a) * 280, vy: Math.sin(a) * 280, t: 0, life: 1.4, dmg: o.dmg * .5, aw: o.aw, tg: nx, bounced: 1, skip: m }); } } if (o.aw) { m.wBurn = { t: 3, tick: .5, d: Math.max(m.wBurn && m.wBurn.t > 0 ? m.wBurn.d : 0, o.dmg * WZ_BURN) }; burst(o.x, o.y, '#5aa8ff', 10, 150, .45, 3); } else { addSfx('fx_fireboom', o.x, o.y, 80, .32, { rot: rand(-.3, .3), g0: .5, g1: 1.1, a: .85 }); burst(o.x, o.y, '#ff8a2a', 8, 140, .4, 3); } DSRC = null; break; }
     } else if (o.k === 'ice') {
       if (!o.hitDone && o.m && o.m.hp > 0) { o.x = o.m.x + o.ox; o.y = o.m.y + o.oy; }
       if (o.t >= o.fall && !o.hitDone) {
@@ -4850,7 +4860,7 @@ function tryAttack(aim) {
   if (P.atkT > 0 || P.dead) return;
   if (P.cls === 'min' && inTown()) return;
   if (S.powers.reap) { P.reapN = (P.reapN || 0) + 1; if (P.reapN % 4 === 0) reapNova(); }
-  P.atkT = .5 / (1 + (S.aspd + hasteMul()) / 100);
+  P.atkT = .5 / (1 + (S.aspd + hasteMul()) / 100) / (S.powers.bladeRush || S.powers.arcRush ? 5 : 1);
   P.atkA = 0; P.atkDur = clamp(P.atkT * .9, .2, .34);
   netCast('atk');
   if (CLS().ranged) {
@@ -4858,21 +4868,22 @@ function tryAttack(aim) {
     let a = aim;
     if (a == null) { const n = nearestMob(P.cls === 'min' ? 400 : 340); a = n ? Math.atan2(n.y - P.y, n.x - P.x) : P.face; }
     P.face = a; P.swing = .16; P.swingDir = a;
-    const bolt = da => pshots.push({ x: P.x + Math.cos(a + da) * 16, y: P.y + Math.sin(a + da) * 16, vx: Math.cos(a + da) * 560, vy: Math.sin(a + da) * 560, life: P.cls === 'min' ? .78 : .65, dmg: PW() * iceMul() * (P.cls === 'min' ? 2 : 1), ice: 1 });
+    const bolt = da => pshots.push({ x: P.x + Math.cos(a + da) * 16, y: P.y + Math.sin(a + da) * 16, vx: Math.cos(a + da) * 560, vy: Math.sin(a + da) * 560, life: P.cls === 'min' ? .78 : .65, dmg: PW() * iceMul() * (P.cls === 'min' ? 2 : 1) * (S.powers.arcRush ? 2 : 1), ice: 1 });
     bolt(0); if (S.powers.multi && Math.random() < .25) bolt(.18);
     return;
   }
   let ang = aim;
-  if (ang == null) { const n = nearestMob(130); ang = n ? Math.atan2(n.y - P.y, n.x - P.x) : P.face; }
+  const rng = S.powers.bladeRush ? 1.3 : 1;
+  if (ang == null) { const n = nearestMob(130 * rng); ang = n ? Math.atan2(n.y - P.y, n.x - P.x) : P.face; }
   P.face = ang; P.swing = .16; P.swingDir = ang;
   const hits = [];
   for (const m of mobs) {
     if (m.hp <= 0) continue;
     const d = Math.hypot(m.x - P.x, m.y - P.y);
-    if (d <= 64 + m.r && (d < m.r + 10 || angDiff(Math.atan2(m.y - P.y, m.x - P.x), ang) < 1.15)) hits.push(m);
+    if (d <= 64 * rng + m.r && (d < m.r + 10 || angDiff(Math.atan2(m.y - P.y, m.x - P.x), ang) < 1.15)) hits.push(m);
   }
   addSfx('slash', P.x + Math.cos(ang) * 30, P.y - 10 + Math.sin(ang) * 26, 92, .2, { rot: ang + SLASH_ROT, g0: .8, g1: 1.1, a: .95 });
-  const bm = P.cls === 'chae' ? 1.5 : 1; for (const m of hits) { damageMob(m, PW() * iceMul() * bm); applyIce(m); if (S.powers.multi && Math.random() < .25 && m.hp > 0) damageMob(m, PW() * bm); }
+  const bm = (P.cls === 'chae' ? 1.5 : 1) * (S.powers.bladeRush ? 2 : 1); for (const m of hits) { damageMob(m, PW() * iceMul() * bm); applyIce(m); if (S.powers.multi && Math.random() < .25 && m.hp > 0) damageMob(m, PW() * bm); }
 }
 function whirl() {
   if (P.dead || P.lv < 3) { if (P.lv < 3) log('회오리베기는 레벨 3에 배웁니다', '#a0978a'); return; }
@@ -5009,7 +5020,7 @@ function updatePlayer(dt) {
   // 공격 입력
   if (mouse.down) tryAttack(Math.atan2(mouse.y - H / 2, mouse.x - W / 2));
   else if (attackHeld || keys.Space || keys.KeyJ) tryAttack(null);
-  else if (!P.dash && nearestMob(CLS().ranged ? (P.cls === 'min' ? 400 : 330) : 58)) tryAttack(null); // 자동 공격: 사거리 안에 몹이 있으면
+  else if (!P.dash && nearestMob(CLS().ranged ? (P.cls === 'min' ? 400 : 330) : (S.powers.bladeRush ? 75 : 58))) tryAttack(null); // 자동 공격: 사거리 안에 몹이 있으면
   // 재생
   const ooc = GT - P.lastHurt > 5 && GT - (P.lastAtk || -99) > 5 ? S.maxHp * .015 : 0;
   P.hp = Math.min(S.maxHp, P.hp + (S.regen + ooc) * S.regenMul * dt);
@@ -6965,11 +6976,13 @@ addEventListener('keydown', e => {
   } else if (e.code === 'Enter' && pickCls && !(e.target && e.target.closest && e.target.closest('[data-close]'))) { e.preventDefault(); startPicked(); }
   else if (e.code === 'Escape') { if (pickCls) closeModal(); else { closeClassSel(); $('#title').hidden = false; } }
 });
+function legFix() { for (const it of [...Object.values(P.eq || {}), ...(P.bag || [])]) { if (!it || it.r !== 3 || !it.power) continue; for (const k in LEG_CLS) { const row = LEG_CLS[k]; if (Object.values(row).some(v => v[1] === it.power) && row[P.cls] && row[P.cls][1] !== it.power) { it.name = row[P.cls][0]; it.power = row[P.cls][1]; } } } }
 function begin(fromSave, cls) {
   if (fromSave) applySave(fromSave); else newGame();
   if (cls) P.cls = cls;
   if (!fromSave && P.cls === 'min' && P.eq.weapon) P.eq.weapon.name = '견습 지팡이';
   P.al.int = P.al.int || 0;
+  if (P.cls) legFix();
   if (P.cls === 'min') { if (P.al.str) { P.al.int += P.al.str; P.al.str = 0; } for (const it of [...Object.values(P.eq), ...P.bag]) if (it && (it.slot === 'weapon' || it.slot === 'ring')) classifyWeapon(it, 'min'); }
   if (P.eq.weapon && !P.eq.weapon.wcls) classifyWeapon(P.eq.weapon, P.cls);
   calc(); P.hp = S.maxHp; P.mp = S.maxMp;
