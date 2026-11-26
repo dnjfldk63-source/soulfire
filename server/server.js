@@ -13,6 +13,18 @@ const GROUP_R = 1600; // 이 거리(px, 약 50칸) 안에 있으면 같은 무�
 
 const players = new Map();
 let seq = 0;
+// 4단계: 파티 — 신청·수락으로 맺고, 지원 기술·보상·레이드 동행은 파티끼리만
+const PARTY_MAX = 4, parties = new Map(); let pseq = 0;
+function partyOf(p) { return p.party ? parties.get(p.party) : null; }
+function sendParty(pt) {
+  if (!pt) return;
+  if (pt.mem.length < 2) { for (const id of pt.mem) { const q = players.get(id); if (q) { q.party = 0; send(q.ws, { t: 'party', p: null }); } } parties.delete(pt.id); return; }
+  if (!pt.mem.includes(pt.leader)) pt.leader = pt.mem[0];
+  const o = JSON.stringify({ t: 'party', p: { id: pt.id, leader: pt.leader, mem: pt.mem.map(id => { const q = players.get(id); return { id, name: q ? q.name : '?', lv: q ? q.lv : 1, cls: q ? q.cls : '' }; }) } });
+  for (const id of pt.mem) toId(id, o);
+}
+function leaveParty(p) { const pt = partyOf(p); p.party = 0; if (!pt) return; pt.mem = pt.mem.filter(id => id !== p.id); send(p.ws, { t: 'party', p: null }); sendParty(pt); }
+const partyMates = p => { const pt = partyOf(p); return pt ? pt.mem.filter(id => id !== p.id) : []; };
 
 const srv = http.createServer((req, res) => {
   if (req.url === '/healthz') { res.writeHead(200, { 'content-type': 'text/plain' }); res.end('ok'); return; }
@@ -76,15 +88,21 @@ wss.on('connection', (ws, req) => {
     // ── 같이 몹 잡기: 담당자 ↔ 무리원 중계 (같은 무리 안에서만)
     if (m.t === 'mobs' && p.owner === p.id && Array.isArray(m.L)) { p.mobAt = Date.now(); const s = JSON.stringify({ t: 'mobs', L: m.L.slice(0, 160) }); for (const id of p.mem) toId(id, s); return; }
     if (m.t === 'fx' && p.owner === p.id) { const s = JSON.stringify({ t: 'fx', k: clean(m.k, 12), a: Array.isArray(m.a) ? m.a.slice(0, 12) : [] }); for (const id of p.mem) toId(id, s); return; }
-    if (m.t === 'kill' && p.owner === p.id) { const s = JSON.stringify({ t: 'kill', n: m.n, by: Array.isArray(m.by) ? m.by.slice(0, 20) : [] }); for (const id of p.mem) toId(id, s); return; }
+    if (m.t === 'kill' && p.owner === p.id) { const s = JSON.stringify({ t: 'kill', n: m.n, by: Array.isArray(m.by) ? m.by.slice(0, 20) : [], k: num(m.k, 0, 1e9) }); for (const id of p.mem) toId(id, s); return; }
     if (m.t === 'hurt' && p.owner === p.id && p.mem.includes(m.to)) { toId(m.to, { t: 'hurt', v: num(m.v, 0, 1e9), n: m.n }); return; }
     // 지원 마법(치유·부활·축복): 같은 무리의 동료에게만
-    if (m.t === 'sup' && p.mem.length) { const k = clean(m.k, 8), o = JSON.stringify({ t: 'sup', from: p.id, k, v: num(m.v, 0, 100), s: num(m.s, 0, 100), d: num(m.d, 0, 60), aw: m.aw ? 1 : 0, f: num(m.f, 0, 1e6) }); const to = Array.isArray(m.to) ? m.to.filter(id => p.mem.includes(id)) : p.mem; for (const id of to) toId(id, o); return; }
+    if (m.t === 'sup' && p.party) { const k = clean(m.k, 8), o = JSON.stringify({ t: 'sup', from: p.id, k, v: num(m.v, 0, 100), s: num(m.s, 0, 100), d: num(m.d, 0, 60), aw: m.aw ? 1 : 0, f: num(m.f, 0, 1e6) }); const mates = partyMates(p), to = Array.isArray(m.to) ? m.to.filter(id => mates.includes(id)) : mates; for (const id of to) toId(id, o); return; }
     // 3단계: 기술 연출 — 무리 안의 다른 사람에게만 (피해 없음, 보여주기 전용)
     if (m.t === 'cast' && p.mem.length) { const a = Array.isArray(m.a) ? m.a.slice(0, 19).map(v => Math.round(num(v, -20000, 20000))) : [], e = Array.isArray(m.e) ? m.e.slice(0, 4).map(v => Math.round(num(v, 0, 20000))) : num(m.e, 0, 9), s = JSON.stringify({ t: 'cast', from: p.id, k: clean(m.k, 12), a, e }); for (const id of p.mem) toId(id, s); return; }
+    if (m.t === 'pinv') { const q = players.get(num(m.to, 0, 1e9)); if (!q || q === p || !q.hello) return; const pt = partyOf(p); if (pt && pt.mem.length >= PARTY_MAX) { send(p.ws, { t: 'pmsg', m: '파티가 가득 찼어요 (최대 ' + PARTY_MAX + '명)' }); return; } if (q.party) { send(p.ws, { t: 'pmsg', m: q.name + ' 님은 이미 다른 파티에 있어요' }); return; } q.inv = q.inv || {}; q.inv[p.id] = Date.now(); send(q.ws, { t: 'pinv', from: p.id, name: p.name, lv: p.lv, cls: p.cls }); return; }
+    if (m.t === 'pans') { const from = num(m.from, 0, 1e9), q = players.get(from); const at = p.inv && p.inv[from]; if (p.inv) delete p.inv[from]; if (!q || !at || Date.now() - at > 12000) return; if (!m.ok) { send(q.ws, { t: 'pmsg', m: p.name + ' 님이 파티 신청을 거절했어요' }); return; } if (p.party) leaveParty(p); let pt = partyOf(q); if (!pt) { pt = { id: ++pseq, leader: q.id, mem: [q.id] }; parties.set(pt.id, pt); q.party = pt.id; } if (pt.mem.length >= PARTY_MAX) { send(p.ws, { t: 'pmsg', m: '파티가 가득 찼어요' }); return; } pt.mem.push(p.id); p.party = pt.id; sendParty(pt); return; }
+    if (m.t === 'pleave') { leaveParty(p); return; }
+    if (m.t === 'php' && p.party) { const s = JSON.stringify({ t: 'php', from: p.id, h: Math.round(num(m.h, 0, 100)) }); for (const id of partyMates(p)) toId(id, s); return; }
+    if (m.t === 'praid' && p.party) { const pt = partyOf(p); if (!pt || pt.leader !== p.id) return; const s = JSON.stringify({ t: 'praid', from: p.id, k: Math.round(num(m.k, 0, 9)) }); for (const id of partyMates(p)) toId(id, s); return; }
+    if (m.t === 'prev' && p.party) { const s = JSON.stringify({ t: 'prev', from: p.id }); for (const id of partyMates(p)) toId(id, s); return; }
     if (m.t === 'dmg' && p.owner && p.owner !== p.id) { toId(p.owner, { t: 'dmg', from: p.id, n: m.n, v: num(m.v, 0, 1e9), c: m.c ? 1 : 0, kb: m.kb ? 1 : 0, x: num(m.x, 0, 20000), y: num(m.y, 0, 20000) }); return; }
   });
-  ws.on('close', () => { if (players.delete(p.id)) { broadcast({ t: 'leave', id: p.id }, p); regroup(); } });
+  ws.on('close', () => { leaveParty(p); if (players.delete(p.id)) { broadcast({ t: 'leave', id: p.id }, p); regroup(); } });
   ws.on('error', () => {});
 });
 
