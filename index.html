@@ -1448,17 +1448,18 @@ const RAID_SHAPES = [
   { liq: 'lava', inside: (dx, dy) => (Math.hypot(dx, dy) <= 13.5 && !(Math.abs(Math.abs(dx) - 7) <= 1 && Math.abs(Math.abs(dy) - 7) <= 1)) || (Math.abs(dx) <= 2 && dy >= 12 && dy <= 19), spawn: [0, 17], boss: [0, -4], out: [0, 19] }, // 팔각 왕좌 + 남쪽 통로
   { liq: 'water', inside: (dx, dy) => Math.hypot(dx, dy) <= 15 || (Math.abs(dx) <= 2 && dy >= 13 && dy <= 21), spawn: [0, 18], boss: [0, -3], out: [0, 20] }, // 시계판 원형 홀 + 남쪽 통로
 ];
+const RAID_SCALE = 1.3, RSC = v => Math.trunc(v * RAID_SCALE); // 레이드 맵 1.3배
 function buildRaidMap(k) {
   const S0 = RAID_SHAPES[k];
   if (!WORLD_SAVE) WORLD_SAVE = { tile: tile.slice(), zoneOf: zoneOf.slice(), dist: dist.slice(), explored: explored.slice(), mm: new Uint8ClampedArray(mmImg.data) };
   tile.fill(T_WALL); zoneOf.fill(6); explored.fill(0); mmImg.data.fill(0);
-  for (let dy = -24; dy <= 24; dy++) for (let dx = -24; dx <= 24; dx++) {
+  for (let dy = -34; dy <= 34; dy++) for (let dx = -34; dx <= 34; dx++) {
     const x = CX + dx, y = CY + dy, i = y * MW + x;
-    if (S0.inside(dx, dy)) tile[i] = T_GROUND;
-    else { let near = false; for (let oy = -2; oy <= 2 && !near; oy++) for (let ox = -2; ox <= 2; ox++) if (S0.inside(dx + ox, dy + oy)) { near = true; break; } if (near && (dx * 7 + dy * 13) % 5 !== 0) tile[i] = T_LIQ; }
+    if (S0.inside(dx / RAID_SCALE, dy / RAID_SCALE)) tile[i] = T_GROUND;
+    else { let near = false; for (let oy = -2; oy <= 2 && !near; oy++) for (let ox = -2; ox <= 2; ox++) if (S0.inside((dx + ox) / RAID_SCALE, (dy + oy) / RAID_SCALE)) { near = true; break; } if (near && (dx * 7 + dy * 13) % 5 !== 0) tile[i] = T_LIQ; }
   }
   ZONES[6].liq = S0.liq;
-  for (let dy = -24; dy <= 24; dy++) for (let dx = -24; dx <= 24; dx++) { const i = (CY + dy) * MW + CX + dx; explored[i] = 1; paintTile(i); }
+  for (let dy = -34; dy <= 34; dy++) for (let dx = -34; dx <= 34; dx++) { const i = (CY + dy) * MW + CX + dx; explored[i] = 1; paintTile(i); }
   mmCtx.putImageData(mmImg, 0, 0); CHUNKS.clear();
 }
 function restoreWorld() {
@@ -1484,10 +1485,10 @@ function enterRaid(k) {
   const Z = ZONES[6]; Z.name = R.name; Z.g = R.g; Z.rd = R.rd; Z.tex = R.tex; Z.tint = R.tint; Z.lv = [MOB[R.boss].lv, MOB[R.boss].lv];
   mobs = []; shots = []; pools = []; flames = []; hz = []; strikes = []; loot = []; swarmOn = null; clearSkillFx();
   buildRaidMap(k); const SH = RAID_SHAPES[k];
-  P.x = tc(CX + SH.spawn[0]); P.y = tc(CY + SH.spawn[1]); P.dash = null; P.recall = 0;
+  P.x = tc(CX + RSC(SH.spawn[0])); P.y = tc(CY + RSC(SH.spawn[1])); P.dash = null; P.recall = 0;
   for (const a of allies) { a.x = P.x - 30; a.y = P.y + 10; }
-  const b = spawnMob(R.boss, tc(CX + SH.boss[0]), tc(CY + SH.boss[1]), 0); b.state = 'chase'; b.ab = 2.2; b.sx = b.x; b.sy = b.y;
-  RAID = { k, t0: GT, mult: 1, boss: b, done: false, pots: 0, revives: 0, got: [], out: { tx: CX + SH.out[0], ty: CY + SH.out[1] }, c: { x: tc(CX), y: tc(CY) } };
+  const b = spawnMob(R.boss, tc(CX + RSC(SH.boss[0])), tc(CY + RSC(SH.boss[1])), 0); b.state = 'chase'; b.ab = 2.2; b.sx = b.x; b.sy = b.y;
+  RAID = { k, t0: GT, mult: 1, boss: b, done: false, pots: 0, revives: 0, got: [], out: { tx: CX + RSC(SH.out[0]), ty: CY + RSC(SH.out[1]) }, c: { x: tc(CX), y: tc(CY) } };
   DMGLOG = DMGLOG || {}; RAID.dlog0 = Object.assign({}, DMGLOG); TALK = [];
   lastZone = 6; $('#zone').textContent = R.name + ' · 레이드'; showBanner(R.name, MOB[R.boss].name, 3);
   rings.push({ x: b.x, y: b.y, t: 0, life: .8, r: 160, col: '255,80,40' }); shake = 10;
@@ -1673,8 +1674,8 @@ function raidAbility0(e, dt, dx, dy, dd) {
     if (p === 'cata') { const tot = []; for (let k = 0; k < 4; k++) { let x = 0, y = 0; for (let q = 0; q < 12; q++) { const a = k / 4 * TAU + rand(-.4, .4), rr = rand(170, 260); x = RAID.c.x + Math.cos(a) * rr; y = RAID.c.y + Math.sin(a) * rr * .85; if (!solidAt(x, y)) break; } const m = spawnMob('rtotem', x, y, e.lv); m.maxHp = m.hp = Math.round(e.maxHp * .01); m.summoner = e; m.state = 'idle'; tot.push(m); burst(x, y - 20, '#ff7a3a', 16, 160, .5, 3); } e.shield = { t: 10, tot, lethal: 1 }; e.dl = { t: 10, name: '종말의 봉인', hint: '10초 안에 불타는 비석 4개를 모두 부수지 않으면 즉사!', sec: 0 }; shake = 10; return true; }
     if (p === 'rewind') { e.rew = { t: 2.6, rec: .25, pts: [] }; addText(e.x, e.y - e.r - 30, '시간 되감기!', '#7ff0e0', 16); addText(P.x, P.y - 40, '지나온 자리가 터져요!', '#ffd76a', 14); return false; }
     if (p === 'hands') { const n = rage ? 4 : 3; for (let k = 0; k < n; k++) { const a = k / n * TAU + Math.random(), rr = rand(150, 240), x = RAID.c.x + Math.cos(a) * rr, y = RAID.c.y + Math.sin(a) * rr * .85; hz.push({ kind: 'lbeam', x, y, a: Math.random() * TAU, sp: (Math.random() < .5 ? -1 : 1) * (rage ? 1.1 : .8), len: 460, warm: 1.2, t: 6.5, t0: 6.5, dmg: e.atk * .55, hitT: 0, col: '127,240,224' }); } addText(e.x, e.y - e.r - 30, '시계 바늘!', '#7ff0e0', 16); return false; }
-    if (p === 'tide') { const dir = Math.floor(Math.random() * 4), gapC = rand(-200, 200), waves = rage ? 3 : 2; for (let w = 0; w < waves; w++) { const g0 = gapC + rand(-120, 120) * w; for (let q = -380; q <= 380; q += 28) { if (Math.abs(q - g0) < 70) continue; const sp = 175, d0 = 420 + w * 150; let x, y, vx, vy; if (dir === 0) { x = RAID.c.x + q; y = RAID.c.y - d0; vx = 0; vy = sp; } else if (dir === 1) { x = RAID.c.x + q; y = RAID.c.y + d0; vx = 0; vy = -sp; } else if (dir === 2) { x = RAID.c.x - d0; y = RAID.c.y + q * .85; vx = sp; vy = 0; } else { x = RAID.c.x + d0; y = RAID.c.y + q * .85; vx = -sp; vy = 0; } shots.push({ x, y, vx, vy, dmg: e.atk * .7, life: 6, col: '#7ff0e0', size: 9, src: e, nowall: 1 }); } } showBanner('시간의 파도!', '빈틈을 찾아 지나가세요', 1.6); return false; }
-    if (p === 'pendulum') { hz.push({ kind: 'pend', x: RAID.c.x, y: RAID.c.y - 470, len: 560, amp: 1.05, sp: rage ? 1.5 : 1.15, a0: 0, t: 7, t0: 7, dmg: e.atk * 1.3, hitT: 0, col: '230,200,120' }); showBanner('거대 진자!', '진자 날을 피하세요', 1.6); return false; }
+    if (p === 'tide') { const dir = Math.floor(Math.random() * 4), gapC = rand(-200, 200), waves = rage ? 3 : 2; for (let w = 0; w < waves; w++) { const g0 = gapC + rand(-120, 120) * w; for (let q = -620; q <= 620; q += 28) { if (Math.abs(q - g0) < 70) continue; const sp = 175, d0 = 660 + w * 150; let x, y, vx, vy; if (dir === 0) { x = RAID.c.x + q; y = RAID.c.y - d0; vx = 0; vy = sp; } else if (dir === 1) { x = RAID.c.x + q; y = RAID.c.y + d0; vx = 0; vy = -sp; } else if (dir === 2) { x = RAID.c.x - d0; y = RAID.c.y + q * .85; vx = sp; vy = 0; } else { x = RAID.c.x + d0; y = RAID.c.y + q * .85; vx = -sp; vy = 0; } shots.push({ x, y, vx, vy, dmg: e.atk * .7, life: 6, col: '#7ff0e0', size: 9, src: e, nowall: 1 }); } } showBanner('시간의 파도!', '빈틈을 찾아 지나가세요', 1.6); return false; }
+    if (p === 'pendulum') { hz.push({ kind: 'pend', x: RAID.c.x, y: RAID.c.y - 600, len: 720, amp: 1.05, sp: rage ? 1.5 : 1.15, a0: 0, t: 7, t0: 7, dmg: e.atk * 1.3, hitT: 0, col: '230,200,120' }); showBanner('거대 진자!', '진자 날을 피하세요', 1.6); return false; }
     if (p === 'stop') { const L = [P, ...netTargets()]; for (const T of L) hz.push({ kind: 'meteor', slow: 1, x: T.x, y: T.y, r: 150, t: 2.6, t0: 2.6, dmg: e.atk * 1.7, src: e, col: '127,240,224', mcol: '#9fe8ff' }); addText(e.x, e.y - e.r - 30, '시간 정지장!', '#7ff0e0', 16); addText(P.x, P.y - 40, '느려져요 · 빨리 빠져나가요!', '#ffd76a', 14); return false; }
     if (p === 'mirror') { e.reflT = GT + 3.5; showBanner('반사 결계!', '3.5초 동안 때리면 피해가 되돌아와요', 1.8); rings.push({ x: e.x, y: e.y, t: 0, life: .6, r: 150, col: '200,255,250' }); return false; }
     if (p === 'gears') { const n = rage ? 8 : 6; for (let k = 0; k < n; k++) { const a = k / n * TAU + Math.random() * .3; hz.push({ kind: 'gear', x: e.x, y: e.y - 20, vx: Math.cos(a) * 300, vy: Math.sin(a) * 300, r: 24, t: 4, t0: 4, dmg: e.atk * .6, hitT: 0, col: '230,200,120' }); } addText(e.x, e.y - e.r - 30, '톱니 부메랑!', '#ffd08a', 16); return false; }
@@ -6098,7 +6099,7 @@ function drawMini() {
   m.fillStyle = '#0b0c10'; m.fillRect(0, 0, s, s);
   m.imageSmoothingEnabled = false;
   if (HOUSE) { const R0 = 12, kk = s / (R0 * 2), ox = CX - R0, oy = CY - R0; m.drawImage(mmCan, ox, oy, R0 * 2, R0 * 2, 0, 0, s, s); m.fillStyle = '#ff6b5a'; for (const e of mobs) m.fillRect((e.x / TS - ox) * kk - 1.5, (e.y / TS - oy) * kk - 1.5, 3, 3); m.fillStyle = '#ffd76a'; m.fillRect((CX - ox) * kk - 3, (CY - 4 - oy) * kk - 3, 6, 6); m.fillStyle = '#fff'; m.beginPath(); m.arc((P.x / TS - ox) * kk, (P.y / TS - oy) * kk, 3, 0, TAU); m.fill(); return; }
-  if (RAID) { const R0 = 25, kk = s / (R0 * 2), ox = CX - R0, oy = CY - R0; m.drawImage(mmCan, ox, oy, R0 * 2, R0 * 2, 0, 0, s, s); const B = RAID.boss; if (B && B.hp > 0 && !B.air) { m.fillStyle = '#ff4b2b'; m.beginPath(); m.arc((B.x / TS - ox) * kk, (B.y / TS - oy) * kk, 4, 0, TAU); m.fill(); } m.fillStyle = '#ff6b5a'; for (const e of mobs) if (!e.boss) m.fillRect((e.x / TS - ox) * kk - 1, (e.y / TS - oy) * kk - 1, 2, 2); m.fillStyle = '#9fd8ff'; m.fillRect((RAID.out.tx - ox) * kk - 2, (RAID.out.ty - oy) * kk - 2, 4, 4); m.fillStyle = '#fff'; m.beginPath(); m.arc((P.x / TS - ox) * kk, (P.y / TS - oy) * kk, 3, 0, TAU); m.fill(); return; }
+  if (RAID) { const R0 = 34, kk = s / (R0 * 2), ox = CX - R0, oy = CY - R0; m.drawImage(mmCan, ox, oy, R0 * 2, R0 * 2, 0, 0, s, s); const B = RAID.boss; if (B && B.hp > 0 && !B.air) { m.fillStyle = '#ff4b2b'; m.beginPath(); m.arc((B.x / TS - ox) * kk, (B.y / TS - oy) * kk, 4, 0, TAU); m.fill(); } m.fillStyle = '#ff6b5a'; for (const e of mobs) if (!e.boss) m.fillRect((e.x / TS - ox) * kk - 1, (e.y / TS - oy) * kk - 1, 2, 2); m.fillStyle = '#9fd8ff'; m.fillRect((RAID.out.tx - ox) * kk - 2, (RAID.out.ty - oy) * kk - 2, 4, 4); m.fillStyle = '#fff'; m.beginPath(); m.arc((P.x / TS - ox) * kk, (P.y / TS - oy) * kk, 3, 0, TAU); m.fill(); return; }
   m.drawImage(mmCan, 0, 0, s, s);
   for (const G of gatesOn()) if (explored[G.ty * MW + G.tx]) { m.fillStyle = G.img ? '#ff6a5a' : '#9fe8ff'; m.fillRect(G.tx * k - 3, G.ty * k - 3, 6, 6); } if (CUR === 'crypt' && explored[SPIRE.ty * MW + SPIRE.tx]) { m.fillStyle = '#ff3a1a'; m.fillRect(SPIRE.tx * k - 4, SPIRE.ty * k - 4, 8, 8); }
   if (CUR === 'main') { m.font = '11px sans-serif'; m.textAlign = 'center'; m.textBaseline = 'middle'; m.fillText('🎣', DOCK.tx * k, POND.ty * k); const S2 = sqState(); m.fillStyle = '#9fffe0'; for (const id in S2) { const st = S2[id], q = SUBQ[id]; if (q && q.type === 'gather' && st.st === 'active' && st.nodes && st.n < q.need) for (const [x, y] of st.nodes) m.fillRect(x * k - 1.5, y * k - 1.5, 3, 3); } }
