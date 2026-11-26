@@ -2734,7 +2734,7 @@ function petTick(dt) {
   if (E.tgt && (E.tgt.gone || !loot.includes(E.tgt))) { E.tgt = null; E.st = E.carry.length ? 'back' : 'follow'; }
   if (E.st === 'follow' && !P.dead) { const n = nextLoot(E.x, E.y); if (n) { E.tgt = n; n.pet = 1; E.st = 'fetch'; } }
   let tx, ty, sp = D.spd;
-  if (E.st === 'fetch') { tx = E.tgt.x; ty = E.tgt.y; if (Math.hypot(tx - E.x, ty - E.y) < 14) { E.carry.push(E.tgt); const n = nextLoot(E.x, E.y); if (n) { E.tgt = n; n.pet = 1; } else { E.tgt = null; E.st = 'back'; } } }
+  if (E.st === 'fetch') { tx = E.tgt.x; ty = E.tgt.y; if (Math.hypot(tx - E.x, ty - E.y) < 14) { const g = E.tgt; g.x = P.x; g.y = P.y; g.t = Math.max(g.t, .5); g.pet = 0; burst(E.x, E.y - 8, '#ffe08a', 5, 70, .3, 2); const n = nextLoot(E.x, E.y); if (n) { E.tgt = n; n.pet = 1; } else { E.tgt = null; E.st = 'follow'; } } }
   if (E.st === 'back') { tx = P.x; ty = P.y; if (Math.hypot(P.x - E.x, P.y - E.y) < 26 || !E.carry.length) { for (const l of E.carry) { l.x = P.x; l.y = P.y; l.pet = 0; l.pc = 0; } E.carry = []; E.st = 'follow'; } }
   E.carry.forEach(l => { l.x = E.x; l.y = E.y; l.pc = 1; });
   if (E.st === 'follow') { const side = Math.cos(P.face || 0) < 0 ? 1 : -1; tx = P.x + side * 34; ty = P.y + 6; sp = Math.max(60, Math.hypot(tx - E.x, ty - E.y) * 4); }
@@ -2743,8 +2743,7 @@ function petTick(dt) {
   if (D.fx && Math.random() < dt * (E.mv ? 14 : 4)) fx.push({ x: E.x + rand(-6, 6), y: E.y - (D.fly ? 34 : 14) + rand(-6, 6), vx: rand(-10, 10), vy: -rand(10, 30), t: 0, life: rand(.3, .6), col: D.fx, size: rand(1, 2.2) });
 }
 function petDraw() {
-  const E = PET; if (!E) return;
-  if (E.carry && E.carry.length) { const D0 = PETS[E.k], hy = E.y - (D0 && D0.fly ? 58 : 40); ctx.save(); ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.beginPath(); ctx.ellipse(E.x, hy - 4, 15, 8, 0, 0, TAU); ctx.fill(); ctx.fillStyle = '#ffd76a'; ctx.fillText('×' + E.carry.length, E.x, hy); ctx.restore(); } const D = PETS[E.k], im = PET_IMG[D.img]; const fly = D.fly ? 26 + Math.sin(GT * 4) * 4 : 0, hop = !D.fly && E.mv ? Math.abs(Math.sin(GT * 12)) * 4 : Math.sin(GT * 3) * .8;
+  const E = PET; if (!E) return; const D = PETS[E.k], im = PET_IMG[D.img]; const fly = D.fly ? 26 + Math.sin(GT * 4) * 4 : 0, hop = !D.fly && E.mv ? Math.abs(Math.sin(GT * 12)) * 4 : Math.sin(GT * 3) * .8;
   ell(E.x, E.y + 10, D.fly ? 10 : 13, 4, 'rgba(0,0,0,.35)');
   if (!im) { circ(E.x, E.y - fly - hop, 9, D.fx); return; }
   if (E.vx < -5) E.flip = 1; else if (E.vx > 5) E.flip = 0;
