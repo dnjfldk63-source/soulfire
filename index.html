@@ -1373,6 +1373,7 @@ function spawnMob(type, x, y, lv, elite = false) {
     maxHp: Math.round(d.hp * hm * (elite ? 3 : 1) * (d.raid ? 1.69 : 1.43)), atk: d.atk * am * (elite ? 1.4 : 1) * (d.raid ? 2.2 : 1.3), def: d.def + (boss ? 0 : lv * .6),
     spd: d.spd * (d.raid ? 1.2 : 1), cd: rand(.4, 1.2), state: 'idle', wt: rand(0, 2), wx: x, wy: y, hit: 0, ab: rand(2.5, 4), tele: null, dash: null, face: 0, anim: Math.random() * 10, adds: 0,
   };
+  if (!d.raid && !e.summoner && lv >= 40) { e.maxHp = Math.round(e.maxHp * 2); e.atk *= 1.5; } // Lv 40 이상 필드 몹: 체력 2배·공격력 +50%
   e.hp = e.maxHp; mobs.push(e); return e;
 }
 function spawnTick() {
