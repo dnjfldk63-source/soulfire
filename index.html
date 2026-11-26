@@ -334,7 +334,8 @@ body.compact #combo{top:calc(env(safe-area-inset-top,0px) + 190px)}
 #sk-i.up::after{content:"▲";position:absolute;top:2px;right:5px;color:#5aff7a;font-size:17px;font-weight:900;line-height:1;text-shadow:0 0 6px #1f8a3a,0 1px 0 #000;animation:upBob 1s ease-in-out infinite}@keyframes upBob{50%{transform:translateY(-3px)}}
 .sk .k{position:absolute;left:4px;top:2px;font-size:10px;color:var(--dim);font-weight:700}
 .sk .n{position:absolute;right:4px;bottom:2px;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums}
-#perfBox{position:fixed;left:8px;top:50%;transform:translateY(-50%);z-index:9999;pointer-events:none;padding:6px 9px;border-radius:7px;background:rgba(0,0,0,.72);border:1px solid #4a3a2a;color:#e8dcc8;font:11.5px/1.5 ui-monospace,Consolas,monospace;max-width:min(430px,70vw)}
+#perfBox{position:fixed;left:8px;top:50%;transform:translateY(-50%);z-index:9999;pointer-events:none;padding:6px 28px 6px 9px;border-radius:7px;background:rgba(0,0,0,.72);border:1px solid #4a3a2a;color:#e8dcc8;font:11.5px/1.5 ui-monospace,Consolas,monospace;max-width:min(430px,70vw)}
+#perfBox .pfx{position:absolute;top:3px;right:3px;width:22px;height:22px;padding:0;border:1px solid #6a5a4a;border-radius:5px;background:rgba(40,30,25,.9);color:#e8dcc8;font-size:15px;line-height:1;cursor:pointer;pointer-events:auto}#perfBox .pfx:hover{background:#5a3a2a}
 .sk .cd{position:absolute;left:0;right:0;bottom:0;height:0;background:rgba(0,0,0,.66)}
 #sk-u{position:absolute;right:0;bottom:calc(100% + 8px);border-color:#d9a54a}#sk-u .ug{font-size:30px;line-height:1;color:#ffd76a;text-shadow:0 0 10px rgba(255,170,60,.9),0 2px 0 #000;position:relative;z-index:1}#sk-u .ut{position:absolute;inset:0;display:grid;place-items:center;font-size:19px;font-weight:900;color:#fff;text-shadow:0 0 4px #000,0 0 2px #000;z-index:3}#sk-u .cd{z-index:2}#sk-u.rdy{animation:ultRdy 1.4s ease-in-out infinite}@keyframes ultRdy{0%,100%{box-shadow:0 0 8px rgba(255,200,90,.55),inset 0 0 8px rgba(255,190,80,.35)}50%{box-shadow:0 0 18px rgba(255,210,110,.95),inset 0 0 14px rgba(255,200,100,.6)}}
 .sk.lock{opacity:.4}
@@ -6803,14 +6804,14 @@ function perfGpu() { if (PERF.gpu) return PERF.gpu; try { const c = document.cre
 function perfToggle(v) { PERF.on = v == null ? !PERF.on : !!v; try { localStorage.setItem('sf_perf', PERF.on ? '1' : '0'); } catch (e) {} if (PERF.el) PERF.el.hidden = !PERF.on; PERF.acc = { n: 0, raw: 0, upd: 0, drw: 0, js: 0, max: 0, long: 0 }; PERF.t0 = 0; }
 function perfTick(raw, upd, drw, js) {
   if (!PERF.on) return;
-  if (!PERF.el) { const d = document.createElement('div'); d.id = 'perfBox'; document.body.appendChild(d); PERF.el = d; }
+  if (!PERF.el) { const d = document.createElement('div'); d.id = 'perfBox'; d.innerHTML = '<button type="button" class="pfx" aria-label="성능 표시 끄기">×</button><div class="pv">측정 중…</div>'; const x = d.querySelector('.pfx'); x.addEventListener('click', e => { e.stopPropagation(); perfToggle(false); }); for (const ev of ['pointerdown', 'touchstart', 'mousedown']) x.addEventListener(ev, e => e.stopPropagation(), { passive: true }); document.body.appendChild(d); PERF.el = d; }
   PERF.el.hidden = false;
   const A = PERF.acc; A.n++; A.raw += raw; A.upd += upd; A.drw += drw; A.js += js; A.max = Math.max(A.max, raw); if (raw > 50) A.long++;
   const now = performance.now(); if (!PERF.t0) PERF.t0 = now; if (now - PERF.t0 < 500) return;
   const n = A.n || 1, fps = A.n / ((now - PERF.t0) / 1000), fr = A.raw / n, jsP = Math.min(100, A.js / Math.max(.01, A.raw) * 100);
   const live = arr => (typeof arr !== 'undefined' && arr && arr.length) || 0;
   const verdict = fps >= 55 ? '좋음' : jsP > 60 ? 'JS(계산) 부담' : 'GPU(칠하기) 부담';
-  PERF.el.innerHTML = `<b style="color:${fps >= 55 ? '#7fe08a' : fps >= 30 ? '#ffd76a' : '#ff7a6a'}">FPS ${fps.toFixed(0)}</b> · 프레임 ${fr.toFixed(1)}ms (최대 ${A.max.toFixed(0)} · 50ms↑ ${A.long})<br>JS ${(A.js / n).toFixed(1)}ms = 로직 ${(A.upd / n).toFixed(1)} + 그리기 ${(A.drw / n).toFixed(1)} · JS 비중 ${jsP.toFixed(0)}%<br>판정: <b>${verdict}</b><br>캔버스 ${cv.width}×${cv.height} · DPR ${DPR} · 화면 배율 ${(window.devicePixelRatio || 1).toFixed(2)} · 보이는 세계 ${Math.round(W / SCALE)}×${Math.round(H / SCALE)}<br>몹 ${live(mobs)} · 입자 ${live(fx)} · 이펙트 ${live(sfx)} · 고리 ${live(rings)} · 탄 ${live(shots) + live(pshots)} · 장판 ${live(hz)}<br><span style="color:#9a8f80">GPU: ${perfGpu()}</span>`;
+  PERF.el.querySelector('.pv').innerHTML = `<b style="color:${fps >= 55 ? '#7fe08a' : fps >= 30 ? '#ffd76a' : '#ff7a6a'}">FPS ${fps.toFixed(0)}</b> · 프레임 ${fr.toFixed(1)}ms (최대 ${A.max.toFixed(0)} · 50ms↑ ${A.long})<br>JS ${(A.js / n).toFixed(1)}ms = 로직 ${(A.upd / n).toFixed(1)} + 그리기 ${(A.drw / n).toFixed(1)} · JS 비중 ${jsP.toFixed(0)}%<br>판정: <b>${verdict}</b><br>캔버스 ${cv.width}×${cv.height} · DPR ${DPR} · 화면 배율 ${(window.devicePixelRatio || 1).toFixed(2)} · 보이는 세계 ${Math.round(W / SCALE)}×${Math.round(H / SCALE)}<br>몹 ${live(mobs)} · 입자 ${live(fx)} · 이펙트 ${live(sfx)} · 고리 ${live(rings)} · 탄 ${live(shots) + live(pshots)} · 장판 ${live(hz)}<br><span style="color:#9a8f80">GPU: ${perfGpu()}</span>`;
   PERF.acc = { n: 0, raw: 0, upd: 0, drw: 0, js: 0, max: 0, long: 0 }; PERF.t0 = now;
 }
 let last = performance.now();
