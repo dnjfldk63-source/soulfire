@@ -77,7 +77,7 @@ wss.on('connection', (ws, req) => {
     if (m.t === 'st') { Object.assign(p, profile(m)); broadcast({ t: 'st', p: pub(p) }, p); return; }
     if (m.t === 'pos') {
       p.x = num(m.x, 0, 20000, p.x); p.y = num(m.y, 0, 20000, p.y); p.face = Math.round(num(m.f, -7, 7) * 100) / 100; p.mv = m.m ? 1 : 0;
-      p.vd = VD.has(m.vd) ? m.vd : 'S'; if (MAPS.has(m.map)) p.map = m.map; p.inst = m.i ? 1 : 0; p.dead = m.d ? 1 : 0; p.dirty = true; return;
+      p.vd = VD.has(m.vd) ? m.vd : 'S'; if (MAPS.has(m.map)) p.map = m.map; p.inst = Math.round(num(m.i, 0, 20)); p.dead = m.d ? 1 : 0; p.dirty = true; return;
     }
     if (m.t === 'chat') {
       const now = Date.now(); if (now - p.chatT < 700) return; p.chatT = now;
@@ -100,6 +100,7 @@ wss.on('connection', (ws, req) => {
     if (m.t === 'php' && p.party) { const s = JSON.stringify({ t: 'php', from: p.id, h: Math.round(num(m.h, 0, 100)) }); for (const id of partyMates(p)) toId(id, s); return; }
     if (m.t === 'praid' && p.party) { const pt = partyOf(p); if (!pt || pt.leader !== p.id) return; const s = JSON.stringify({ t: 'praid', from: p.id, k: Math.round(num(m.k, 0, 9)) }); for (const id of partyMates(p)) toId(id, s); return; }
     if (m.t === 'prev' && p.party) { const s = JSON.stringify({ t: 'prev', from: p.id }); for (const id of partyMates(p)) toId(id, s); return; }
+    if (m.t === 'rfx' && p.owner === p.id && p.mem.length && m.o && typeof m.o === 'object') { const s = JSON.stringify({ t: 'rfx', o: m.o }); if (s.length < 16000) for (const id of p.mem) toId(id, s); return; }
     if (m.t === 'dmg' && p.owner && p.owner !== p.id) { toId(p.owner, { t: 'dmg', from: p.id, n: m.n, v: num(m.v, 0, 1e9), c: m.c ? 1 : 0, kb: m.kb ? 1 : 0, x: num(m.x, 0, 20000), y: num(m.y, 0, 20000) }); return; }
   });
   ws.on('close', () => { leaveParty(p); if (players.delete(p.id)) { broadcast({ t: 'leave', id: p.id }, p); regroup(); } });
@@ -111,7 +112,7 @@ function regroup() {
   const now = Date.now(), L = [...players.values()].filter(p => p.hello && p.v >= 2), par = new Map(L.map(p => [p.id, p.id]));
   const find = a => { while (par.get(a) !== a) { par.set(a, par.get(par.get(a))); a = par.get(a); } return a; };
   for (let i = 0; i < L.length; i++) for (let j = i + 1; j < L.length; j++) {
-    const a = L[i], b = L[j]; if (a.inst || b.inst || a.map !== b.map) continue;
+    const a = L[i], b = L[j]; if (a.map !== b.map || a.inst !== b.inst) continue; if (a.inst && !(a.inst >= 10 && a.party && a.party === b.party)) continue; // 레이드 안은 같은 레이드의 같은 파티끼리만
     if (Math.hypot(a.x - b.x, a.y - b.y) < GROUP_R) { const ra = find(a.id), rb = find(b.id); if (ra !== rb) par.set(Math.max(ra, rb), Math.min(ra, rb)); }
   }
   const groups = new Map(); for (const p of L) { const r = find(p.id); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(p); }
