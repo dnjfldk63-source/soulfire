@@ -1447,11 +1447,11 @@ function spawnSwarm(z) {
 
 // ───────── 레이드: 마을 관리인 → 전용 투기장, 시간 지나면 광폭화(받는 피해 2배씩) ─────────
 const RAIDS = [
-  { boss: 'gorvak', tex: 'ash', tint: 'rgba(140,20,10,.28)', set: 'blood', setCh: .45, q: 1.6, name: '피의 투기장', cp: 30000, enr: 120, ilv: 50, items: 3, minR: 1, g: ['#3a2422', '#41292a', '#35201f'], rd: '#5a2a26', desc: '돌진과 도약 내려찍기, 피 웅덩이를 조심하세요' },
-  { boss: 'isbela', tex: 'town', tint: 'rgba(60,120,190,.3)', set: 'frost', setCh: .4, q: 2.2, name: '서리 첨탑', cp: 60000, enr: 150, ilv: 50, items: 4, minR: 2, g: ['#25313d', '#2a3744', '#222c37'], rd: '#3a4a5a', desc: '하늘에서 얼음 혜성이 쏟아지고, 얼음 장판이 깔려요' },
-  { boss: 'abyss', tex: 'ash', tint: 'rgba(120,40,0,.18)', set: 'abyss', setCh: .35, q: 2.9, name: '재의 군영', cp: 90000, enr: 180, ilv: 50, items: 5, minR: 2, g: ['#45302f', '#4a3433', '#402b2a'], rd: '#5a3a36', desc: '재의 밤에 은종 마을을 불태운 벨가로스의 선봉장. 메테오·돌진·내려찍기·소환을 모두 씁니다' },
-  { boss: 'ashwarden', story: 1, tex: 'crypt2', tint: 'rgba(120,30,10,.22)', set: 'abyss', setCh: .5, q: 3.4, name: '종탑 꼭대기', cp: 150000, enr: 210, ilv: 60, items: 5, minR: 3, g: ['#2e2224', '#322628', '#2a1e20'], rd: '#3a2a2a', desc: '스토리 최종전' },
-  { boss: 'chronor', tex: 'crypt2', tint: 'rgba(40,170,160,.2)', set: 'chrono', setCh: .3, q: 3.8, name: '멈춘 시계탑', cp: 180000, enr: 210, ilv: 60, items: 5, minR: 2, g: ['#1f2a2c', '#232f31', '#1b2527'], rd: '#2c3b3d', desc: '시간을 되감고 멈추는 시계공 크로노르. 지나온 자리·회전하는 시침·시간의 파도·진자를 조심하세요' },
+  { boss: 'gorvak', tex: 'ash', tint: 'rgba(140,20,10,.28)', set: 'blood', setCh: .45, q: 1.6, name: '피의 투기장', cp: 60000, enr: 120, ilv: 50, items: 3, minR: 1, g: ['#3a2422', '#41292a', '#35201f'], rd: '#5a2a26', desc: '돌진과 도약 내려찍기, 피 웅덩이를 조심하세요' },
+  { boss: 'isbela', tex: 'town', tint: 'rgba(60,120,190,.3)', set: 'frost', setCh: .4, q: 2.2, name: '서리 첨탑', cp: 70000, enr: 150, ilv: 50, items: 4, minR: 2, g: ['#25313d', '#2a3744', '#222c37'], rd: '#3a4a5a', desc: '하늘에서 얼음 혜성이 쏟아지고, 얼음 장판이 깔려요' },
+  { boss: 'abyss', tex: 'ash', tint: 'rgba(120,40,0,.18)', set: 'abyss', setCh: .35, q: 2.9, name: '재의 군영', cp: 110000, enr: 180, ilv: 50, items: 5, minR: 2, g: ['#45302f', '#4a3433', '#402b2a'], rd: '#5a3a36', desc: '재의 밤에 은종 마을을 불태운 벨가로스의 선봉장. 메테오·돌진·내려찍기·소환을 모두 씁니다' },
+  { boss: 'ashwarden', story: 1, tex: 'crypt2', tint: 'rgba(120,30,10,.22)', set: 'abyss', setCh: .5, q: 3.4, name: '종탑 꼭대기', cp: 180000, enr: 210, ilv: 60, items: 5, minR: 3, g: ['#2e2224', '#322628', '#2a1e20'], rd: '#3a2a2a', desc: '스토리 최종전' },
+  { boss: 'chronor', tex: 'crypt2', tint: 'rgba(40,170,160,.2)', set: 'chrono', setCh: .3, q: 3.8, name: '멈춘 시계탑', cp: 160000, enr: 210, ilv: 60, items: 5, minR: 2, g: ['#1f2a2c', '#232f31', '#1b2527'], rd: '#2c3b3d', desc: '시간을 되감고 멈추는 시계공 크로노르. 지나온 자리·회전하는 시침·시간의 파도·진자를 조심하세요' },
 ];
 let RAID = null, hz = [], WORLD_SAVE = null;
 // 레이드 맵 모양 (중심 CX,CY 기준 칸 좌표)
@@ -3835,7 +3835,7 @@ function spireTalk() {
     '종이 세 번 거꾸로 울리면 문이 열리고, 죽은 이들이 돌아오네. 엘자도, 리나도, 우리 형제들도.',
     '자네도 잃은 사람이 있지 않나? 함께 기다리세. …싫다면, 자네도 재가 되게.',
   ];
-  lines.push(`권장 전투력 150,000 · 지금 ${fmt(combatPower())}`);
+  lines.push(`권장 전투력 180,000 · 지금 ${fmt(combatPower())}`);
   openDialog(lines, [{ label: '⚔ 검을 뽑는다', fn: () => { closeDialog(); enterRaid(RAIDS.findIndex(R => R.story)); } }, { label: '물러난다', fn: closeDialog }], who);
 }
 
