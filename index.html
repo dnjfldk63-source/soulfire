@@ -155,12 +155,13 @@ body.compact #eqToast{top:auto;bottom:calc(env(safe-area-inset-bottom,0px) + 96p
 .rr-stats{display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;width:100%;font-size:13px}
 .rr-stats div{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid #2a2018;padding:4px 0}.rr-stats span{color:var(--dim)}.rr-stats b{color:#f2dfb0}
 .rr-b{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:6px;position:sticky;bottom:-18px;width:calc(100% + 32px);padding:10px 16px 14px;background:linear-gradient(rgba(10,7,6,0),#0a0706 35%);z-index:3}
-.rr-dmg{max-height:30vh;overflow-y:auto}
+.rr-dmg{overflow:hidden}
+#raidRes{overflow-x:hidden}
 #rrGot{z-index:47;background:rgba(0,0,0,.72)}
 .rr-rank{font-size:clamp(64px,20vw,110px)!important}
 .rr-dmg,.rr-loot{width:100%;text-align:left;font-size:12px}
 .rr-dmg .lbl,.rr-loot .lbl{color:#ffcf8a;font-weight:800;margin:4px 0 6px;font-size:12px}
-.rr-dmg .rd{display:grid;grid-template-columns:minmax(64px,92px) 1fr 70px;align-items:center;gap:6px;padding:2px 0}
+.rr-dmg .rd{display:grid;grid-template-columns:minmax(0,8.5em) minmax(24px,1fr) max-content;align-items:center;gap:6px;padding:2px 0}
 .rr-dmg .rd span{color:#e8dcc8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rr-dmg .rd i{display:block;height:9px;min-width:2px;border-radius:5px;background:linear-gradient(90deg,#ff8a3a,#ffd76a)}.rr-dmg .rd b{color:#f2dfb0;text-align:right;font-weight:700;white-space:nowrap}
 .rr-loot .rg{display:flex;flex-direction:column;gap:4px}.rr-loot .rl{display:flex;align-items:center;gap:8px;padding:4px 6px;background:rgba(255,255,255,.04);border-radius:6px;min-width:0}
 .rr-loot .rl .ii{width:30px;height:30px;flex:0 0 30px}.rr-loot .rl .em{width:30px;text-align:center;font-size:18px;flex:0 0 30px}.rr-loot .rl b{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}.rr-loot .rl small{color:var(--dim);margin-left:auto;white-space:nowrap;font-size:11px}
@@ -1557,7 +1558,7 @@ function showRaidResult() {
   el.querySelector('.rr-stats').innerHTML = `<div><span>클리어 시간</span><b>${f(tm)}</b></div><div><span>물약 사용</span><b>${RAID.pots}개</b></div><div><span>부활석 사용</span><b>${RAID.revives} / 3</b></div><div><span>광폭화</span><b>${tm > R.enr ? '×' + RAID.mult + ' 까지 버팀' : '들어가기 전 처치'}</b></div><div><span>최고 랭크</span><b>${P.rrank[R.boss]}</b></div>`;
   { const D = DMGLOG || {}, d0 = RAID.dlog0 || {}, rows = Object.keys(D).map(k => [k, D[k] - (d0[k] || 0)]).filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]), tot = rows.reduce((a, x) => a + x[1], 0) || 1;
     const nm = k => k === 'basic' ? '기본 공격' : k === 'poison' ? '독' : k === 'wBurn' ? '푸른 화상' : k === 'ult' ? '궁극기 · ' + (ULTS[P.cls] ? ULTS[P.cls].name : '') : SKILLS[k] ? SKILLS[k].name : k;
-    el.querySelector('.rr-dmg').innerHTML = `<div class="lbl">기술별 피해 · 총 ${fmt(tot)} (초당 ${fmt(tot / Math.max(1, tm))})</div>` + rows.map(([k, v]) => `<div class="rd"><span>${nm(k)}</span><i style="width:${(v / rows[0][1] * 100).toFixed(1)}%"></i><b>${Math.round(v / tot * 100)}% · ${fmt(v / Math.max(1, tm))}/s</b></div>`).join(''); }
+    el.querySelector('.rr-dmg').innerHTML = `<div class="lbl">기술별 피해 · 총 ${fmt(tot)} (초당 ${fmt(tot / Math.max(1, tm))})</div>` + rows.map(([k, v]) => `<div class="rd"><span>${nm(k)}</span><i style="width:${(v / rows[0][1] * 100).toFixed(1)}%"></i><b>${Math.round(v / tot * 100)}% · ${(d => d >= 1e8 ? (d / 1e8).toFixed(1) + '억' : d >= 1e4 ? (d / 1e4).toFixed(d >= 1e6 ? 0 : 1) + '만' : fmt(d))(v / Math.max(1, tm))}/s</b></div>`).join(''); }
   $('#rrRetry').hidden = !!R.story || !!(NET.party && NET.party.leader !== NET.id);
   el.hidden = false; el.classList.remove('play'); void el.offsetWidth; el.classList.add('play');
 }
