@@ -3486,8 +3486,8 @@ const BGM_SYN = (() => {
 // canyon: 「Evil temple ambiance loop」 · grave: 「Moonlit Lullaby for the Lost」 · snow: 「Snow Theme」 · crypt: 「Dungeon Ambience」
 // house: 「Dark Cavern Ambient」 · raid: Juhani Junkala 「Epic Boss Battle」 — 모두 CC0
 const BGM = (() => {
-  const FILES = { town: 'town', field: 'field', forest: 'field', ruin: 'field', canyon: 'field', grave: 'field', snow: 'snow', crypt: 'crypt', house: 'field', raid: 'raid', title: 'title', death: 'death' };
-  const LV = { town: .8, field: .75, snow: .8, crypt: .85, raid: .55, title: .85, death: .9 };
+  const FILES = { town: 'town', field: 'field', forest: 'field', ruin: 'field', canyon: 'field', grave: 'field', snow: 'snow', crypt: 'crypt', house: 'field', raid: 'raid', title: 'title', death: 'death', ending: 'ending' };
+  const LV = { town: .8, field: .75, snow: .8, crypt: .85, raid: .55, title: .85, death: .9, ending: 1 };
   let ac = null, master = null, mood = null, on = BGM_SYN.on, vol = BGM_SYN.vol, cur = null, failed = false; const tr = {};
   function init() { if (ac) return; const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return; ac = new AC(); master = ac.createGain(); master.gain.value = 0; master.connect(ac.destination); }
   function track(f) {
@@ -3530,7 +3530,7 @@ const BGM = (() => {
 
 function bgmTitle() { if (started || !BGM.on) return; BGM.mood('title'); BGM.start(); }
 for (const e of ['pointerdown', 'keydown']) window.addEventListener(e, bgmTitle, { capture: true, passive: true });
-function bgmZone() { if (!started) return; const z = P.dead ? 'death' : RAID ? 'raid' : HOUSE ? 'house' : CUR === 'snow' ? 'snow' : CUR === 'crypt' ? 'crypt' : ({ 0: 'town', 1: 'field', 2: 'forest', 3: 'ruin', 4: 'canyon', 5: 'grave' })[zoneAt(P.x, P.y)] || 'field'; BGM.mood(z); }
+function bgmZone() { if (!started || ENDING) return; const z = P.dead ? 'death' : RAID ? 'raid' : HOUSE ? 'house' : CUR === 'snow' ? 'snow' : CUR === 'crypt' ? 'crypt' : ({ 0: 'town', 1: 'field', 2: 'forest', 3: 'ruin', 4: 'canyon', 5: 'grave' })[zoneAt(P.x, P.y)] || 'field'; BGM.mood(z); }
 
 // ───────── 효과음 (합성 · 동시 재생 제한) ─────────
 let HITSTOP = 0, HITSTOP_LAST = 0, SFXK = null, DSRC = null, DMGLOG = null; const CLS_SFX = { mik: 'blunt', chae: 'blade', min: 'magic', kok: 'axe', mun: 'sword' };
@@ -3860,7 +3860,7 @@ const END_SC = [
   ['', '', '소울파이어', 'fin'],
 ];
 function playEnding() {
-  P.ending = 1; ENDING = true; syncStory(); save(true); BGM.duck && BGM.duck(4);
+  P.ending = 1; ENDING = true; syncStory(); save(true); BGM.mood('ending');
   if (!document.getElementById('endCss')) { const st = document.createElement('style'); st.id = 'endCss'; st.textContent = `#endScene{position:fixed;inset:0;z-index:9999;background:#000;display:flex;align-items:flex-end;justify-content:center;cursor:pointer;animation:esIn 1.6s ease;user-select:none}
 #endScene img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity 1.4s ease;animation:esKb 40s linear infinite alternate}
 #endScene img.on{opacity:.9}
@@ -3884,7 +3884,7 @@ function playEnding() {
   const next = () => {
     if (typing) { clearInterval(typing); typing = null; pp.textContent = END_SC[k][2]; return; }
     k++; if (k < END_SC.length) return show();
-    el.classList.add('out'); setTimeout(() => { el.remove(); ENDING = false; }, 1200);
+    el.classList.add('out'); setTimeout(() => { el.remove(); ENDING = false; bgmZone(); }, 1200);
     P.title = '은종의 기사'; showBanner('엔딩 달성 · 칭호 「은종의 기사」', '재가 그친 은종 마을 · 모험은 계속됩니다', 6); SFX.level(); save(true);
   };
   el.addEventListener('click', e => { e.stopPropagation(); next(); });
